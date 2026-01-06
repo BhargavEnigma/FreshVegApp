@@ -48,9 +48,13 @@ const env = {
     otp: {
         msg91AuthKey: requireEnv("MSG91_AUTH_KEY"),
         msg91TemplateId: requireEnv("MSG91_TEMPLATE_ID"),
-        msg91OTPexpiryMinutes: requireEnv("OTP_EXPIRY_MINUTES"),
-        msg91RealTimeRes: requireEnv("MSG91_REALTIME_RESPONSE"),
-        otpLength: requireEnv("OTP_LENGTH")
+        msg91OTPexpiryMinutes: parseIntSafe(process.env.OTP_EXPIRY_MINUTES, 5),
+        msg91RealTimeRes: parseIntSafe(process.env.MSG91_REALTIME_RESPONSE, 1),
+        otpLength: parseIntSafe(process.env.OTP_LENGTH, 4),
+
+        // these should NOT be required in production
+        bypassEnabled: parseBool(process.env.OTP_BYPASS_ENABLED, false),
+        bypassCode: String(process.env.OTP_BYPASS_CODE || "1234").trim(),
     }
 };
 

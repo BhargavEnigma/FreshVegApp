@@ -3,6 +3,41 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
     async up(queryInterface, Sequelize) {
+
+const safeAddIndex = async (table, fields, options) => {
+    try {
+        await queryInterface.addIndex(table, fields, options);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
+const safeQuery = async (sql) => {
+    try {
+        await queryInterface.sequelize.query(sql);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
         await queryInterface.createTable("users", {
             id: {
                 type: Sequelize.UUID,
@@ -45,10 +80,10 @@ module.exports = {
         });
 
         // Indexes
-        await queryInterface.addIndex("users", ["status"], { name: "users_status_idx" });
+        await safeAddIndex("users", ["status"], { name: "users_status_idx" });
 
         // DB-level CHECK constraint (Postgres)
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE users
             ADD CONSTRAINT users_status_check
             CHECK (status IN ('active', 'blocked'));

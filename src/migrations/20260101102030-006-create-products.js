@@ -3,6 +3,41 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
     async up(queryInterface, Sequelize) {
+
+const safeAddIndex = async (table, fields, options) => {
+    try {
+        await queryInterface.addIndex(table, fields, options);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
+const safeQuery = async (sql) => {
+    try {
+        await queryInterface.sequelize.query(sql);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
         await queryInterface.createTable("products", {
             id: {
                 type: Sequelize.UUID,
@@ -63,17 +98,17 @@ module.exports = {
             },
         });
 
-        await queryInterface.addIndex("products", ["category_id"], { name: "products_category_idx" });
-        await queryInterface.addIndex("products", ["is_active", "is_out_of_stock"], { name: "products_active_idx" });
-        await queryInterface.addIndex("products", ["name"], { name: "products_name_idx" });
+        await safeAddIndex("products", ["category_id"], { name: "products_category_idx" });
+        await safeAddIndex("products", ["is_active", "is_out_of_stock"], { name: "products_active_idx" });
+        await safeAddIndex("products", ["name"], { name: "products_name_idx" });
 
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE products
             ADD CONSTRAINT products_mrp_paise_check
             CHECK (mrp_paise >= 0);
         `);
 
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE products
             ADD CONSTRAINT products_selling_price_paise_check
             CHECK (selling_price_paise >= 0);

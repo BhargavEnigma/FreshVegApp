@@ -1,5 +1,5 @@
 const axios = require("axios");
-const env = require("../config/env");
+const { env } = require("../config/env");
 const { AppError } = require("../utils/errors");
 
 const MSG91_BASE_URL = "https://control.msg91.com/api/v5";

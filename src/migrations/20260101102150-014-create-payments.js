@@ -3,6 +3,41 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
     async up(queryInterface, Sequelize) {
+
+const safeAddIndex = async (table, fields, options) => {
+    try {
+        await queryInterface.addIndex(table, fields, options);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
+const safeQuery = async (sql) => {
+    try {
+        await queryInterface.sequelize.query(sql);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
         await queryInterface.createTable("payments", {
             id: {
                 type: Sequelize.UUID,
@@ -53,22 +88,22 @@ module.exports = {
             },
         });
 
-        await queryInterface.addIndex("payments", ["order_id"], { name: "payments_order_idx" });
-        await queryInterface.addIndex("payments", ["status"], { name: "payments_status_idx" });
+        await safeAddIndex("payments", ["order_id"], { name: "payments_order_idx" });
+        await safeAddIndex("payments", ["status"], { name: "payments_status_idx" });
 
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE payments
             ADD CONSTRAINT payments_method_check
             CHECK (method IN ('cod','upi'));
         `);
 
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE payments
             ADD CONSTRAINT payments_status_check
             CHECK (status IN ('pending','paid','failed','refunded'));
         `);
 
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE payments
             ADD CONSTRAINT payments_amount_paise_check
             CHECK (amount_paise >= 0);
