@@ -9,7 +9,8 @@ async function start() {
 
     startScheduler();
 
-    app.listen(env.port, () => {
+    // ✅ IMPORTANT for Render: bind to 0.0.0.0
+    app.listen(env.port, "0.0.0.0", () => {
         console.log(`Server running on port ${env.port}`);
     });
 }
