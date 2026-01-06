@@ -3,6 +3,41 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
     async up(queryInterface, Sequelize) {
+
+const safeAddIndex = async (table, fields, options) => {
+    try {
+        await queryInterface.addIndex(table, fields, options);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
+const safeQuery = async (sql) => {
+    try {
+        await queryInterface.sequelize.query(sql);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
         await queryInterface.createTable("delivery_slots", {
             id: {
                 type: Sequelize.UUID,
@@ -39,7 +74,7 @@ module.exports = {
             },
         });
 
-        await queryInterface.addIndex("delivery_slots", ["is_active"], {
+        await safeAddIndex("delivery_slots", ["is_active"], {
             name: "delivery_slots_active_idx",
         });
     },

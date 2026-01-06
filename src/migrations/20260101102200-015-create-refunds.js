@@ -3,6 +3,41 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
     async up(queryInterface, Sequelize) {
+
+const safeAddIndex = async (table, fields, options) => {
+    try {
+        await queryInterface.addIndex(table, fields, options);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
+const safeQuery = async (sql) => {
+    try {
+        await queryInterface.sequelize.query(sql);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
         await queryInterface.createTable("refunds", {
             id: {
                 type: Sequelize.UUID,
@@ -52,15 +87,15 @@ module.exports = {
             },
         });
 
-        await queryInterface.addIndex("refunds", ["order_id"], { name: "refunds_order_idx" });
+        await safeAddIndex("refunds", ["order_id"], { name: "refunds_order_idx" });
 
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE refunds
             ADD CONSTRAINT refunds_status_check
             CHECK (status IN ('initiated','succeeded','failed'));
         `);
 
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE refunds
             ADD CONSTRAINT refunds_amount_paise_check
             CHECK (amount_paise >= 0);

@@ -3,6 +3,41 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
     async up(queryInterface, Sequelize) {
+
+const safeAddIndex = async (table, fields, options) => {
+    try {
+        await queryInterface.addIndex(table, fields, options);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
+const safeQuery = async (sql) => {
+    try {
+        await queryInterface.sequelize.query(sql);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
         await queryInterface.createTable("user_sessions", {
             id: {
                 type: Sequelize.UUID,
@@ -62,15 +97,15 @@ module.exports = {
             },
         });
 
-        await queryInterface.addIndex("user_sessions", ["user_id"], {
+        await safeAddIndex("user_sessions", ["user_id"], {
             name: "user_sessions_user_id_idx",
         });
 
-        await queryInterface.addIndex("user_sessions", ["refresh_token_hash"], {
+        await safeAddIndex("user_sessions", ["refresh_token_hash"], {
             name: "user_sessions_token_hash_idx",
         });
 
-        await queryInterface.addIndex("user_sessions", ["user_id", "is_revoked", "expires_at"], {
+        await safeAddIndex("user_sessions", ["user_id", "is_revoked", "expires_at"], {
             name: "user_sessions_active_idx",
         });
     },
