@@ -9,7 +9,7 @@ async function create(req, res) {
     const body = createWarehouseSchema.parse(req.body);
 
     const warehouse = await WarehouseService.createWarehouse(body);
-    return ResponseUtil.created(res, warehouse);
+    return ResponseUtil.created(res, 201, warehouse);
 }
 
 async function list(req, res) {
@@ -19,7 +19,7 @@ async function list(req, res) {
         includeInactive,
     });
 
-    return ResponseUtil.ok(res, warehouses);
+    return ResponseUtil.ok(res, 200, warehouses);
 }
 
 async function getById(req, res) {
@@ -28,7 +28,7 @@ async function getById(req, res) {
         return ResponseUtil.notFound(res, "Warehouse not found");
     }
 
-    return ResponseUtil.ok(res, warehouse);
+    return ResponseUtil.ok(res, 200, warehouse);
 }
 
 async function update(req, res) {
@@ -43,7 +43,7 @@ async function update(req, res) {
         return ResponseUtil.notFound(res, "Warehouse not found");
     }
 
-    return ResponseUtil.ok(res, warehouse);
+    return ResponseUtil.ok(res, 200, warehouse);
 }
 
 async function deactivate(req, res) {
@@ -55,7 +55,7 @@ async function deactivate(req, res) {
         return ResponseUtil.notFound(res, "Warehouse not found");
     }
 
-    return ResponseUtil.ok(res, warehouse);
+    return ResponseUtil.ok(res, 200, warehouse);
 }
 
 module.exports = {

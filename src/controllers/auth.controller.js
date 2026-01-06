@@ -29,7 +29,7 @@ async function sendOtp(req, res) {
             ...meta,
         });
 
-        return ResponseUtil.ok(res, data);
+        return ResponseUtil.ok(res, 200, data);
     } catch (e) {
         // ✅ Always log actual error for debugging
         console.error("SEND OTP ERROR:", {
@@ -77,7 +77,7 @@ async function verifyOtp(req, res) {
             ...meta,
         });
 
-        return ResponseUtil.ok(res, data);
+        return ResponseUtil.ok(res, 200, data);
     } catch (e) {
         console.error("VERIFY OTP ERROR:", {
             name: e?.name,
@@ -112,7 +112,7 @@ async function refreshToken(req, res) {
             device_id: body.device_id || null,
         });
 
-        return ResponseUtil.ok(res, data);
+        return ResponseUtil.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -133,7 +133,7 @@ async function logout(req, res) {
             refresh_token: body.refresh_token,
         });
 
-        return ResponseUtil.ok(res, data);
+        return ResponseUtil.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -149,7 +149,7 @@ async function logout(req, res) {
 async function me(req, res) {
     try {
         const data = await AuthService.getMe({ userId: req.user.userId });
-        return ResponseUtil.ok(res, data);
+        return ResponseUtil.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus, e.code, e.message);

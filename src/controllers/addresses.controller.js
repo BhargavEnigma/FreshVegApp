@@ -12,7 +12,7 @@ const {
 async function list(req, res) {
     try {
         const data = await AddressesService.list({ userId: req.user.userId });
-        return ResponseUtil.ok(res, data);
+        return ResponseUtil.ok(res, 200, data);
     } catch (e) {
         console.error("LIST ADDRESSES ERROR:", e?.message, e?.stack);
         if (e instanceof AppError) {
@@ -31,7 +31,7 @@ async function create(req, res) {
             payload: body,
         });
 
-        return ResponseUtil.created(res, data);
+        return ResponseUtil.created(res, 201, data);
     } catch (e) {
         console.log('ERROR ____', e);
         // console.error("CREATE ADDRESS ERROR:", {
@@ -64,7 +64,7 @@ async function update(req, res) {
             payload: body,
         });
 
-        return ResponseUtil.ok(res, data);
+        return ResponseUtil.ok(res, 200, data);
     } catch (e) {
         console.error("UPDATE ADDRESS ERROR:", {
             name: e?.name,
@@ -94,7 +94,7 @@ async function remove(req, res) {
             addressId: params.id,
         });
 
-        return ResponseUtil.ok(res, data);
+        return ResponseUtil.ok(res, 200, data);
     } catch (e) {
         console.error("DELETE ADDRESS ERROR:", e?.message, e?.stack);
         if (e instanceof AppError) {
@@ -113,7 +113,7 @@ async function setDefault(req, res) {
             addressId: params.id,
         });
 
-        return ResponseUtil.ok(res, data);
+        return ResponseUtil.ok(res, 200, data);
     } catch (e) {
         console.error("SET DEFAULT ADDRESS ERROR:", e?.message, e?.stack);
         if (e instanceof AppError) {

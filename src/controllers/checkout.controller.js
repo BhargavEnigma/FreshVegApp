@@ -12,7 +12,7 @@ async function checkout(req, res) {
             payload: body,
         });
 
-        return Response.created(res, data);
+        return Response.created(res, 201, data);
     } catch (e) {
         console.error("CHECKOUT ERROR:", {
             name: e?.name,

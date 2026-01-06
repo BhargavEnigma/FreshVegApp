@@ -13,7 +13,7 @@ async function list(req, res) {
             query,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         console.error("LIST DELIVERY SLOTS ERROR:", {
             name: e?.name,

@@ -19,7 +19,7 @@ async function listMyOrders(req, res) {
             query,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         console.error("LIST MY ORDERS ERROR:", e?.message, e?.stack);
         if (e instanceof AppError) {
@@ -41,7 +41,7 @@ async function getMyOrderById(req, res) {
             orderId: params.orderId,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         console.error("GET MY ORDER ERROR:", e?.message, e?.stack);
         if (e instanceof AppError) {
@@ -65,7 +65,7 @@ async function cancelMyOrder(req, res) {
             reason: body.reason ?? null,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         console.error("CANCEL ORDER ERROR:", e?.message, e?.stack);
         if (e instanceof AppError) {

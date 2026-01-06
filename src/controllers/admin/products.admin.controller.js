@@ -19,7 +19,7 @@ async function create(req, res) {
     try {
         const body = createProductSchema.parse(req.body);
         const data = await AdminProductsService.createProduct({ payload: body });
-        return Response.created(res, data);
+        return Response.created(res, 201, data);
     } catch (e) {
         console.log('CREATE PRODUCT ERROR : ', e);
         if (e instanceof AppError) {
@@ -37,7 +37,7 @@ async function update(req, res) {
         const params = productIdParamSchema.parse(req.params);
         const body = updateProductSchema.parse(req.body);
         const data = await AdminProductsService.updateProduct({ productId: params.productId, payload: body });
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -54,7 +54,7 @@ async function setActive(req, res) {
         const params = productIdParamSchema.parse(req.params);
         const body = setActiveSchema.parse(req.body);
         const data = await AdminProductsService.setProductActive({ productId: params.productId, is_active: body.is_active });
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -77,7 +77,7 @@ async function createPack(req, res) {
             payload: body,
         });
 
-        return Response.created(res, data);
+        return Response.created(res, 201, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -99,7 +99,7 @@ async function updatePack(req, res) {
             payload: body,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -121,7 +121,7 @@ async function setPackActive(req, res) {
             is_active: body.is_active,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -141,7 +141,7 @@ async function deletePack(req, res) {
             packId: params.packId,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);

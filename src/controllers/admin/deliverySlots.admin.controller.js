@@ -14,7 +14,7 @@ const {
 async function list(req, res) {
     try {
         const data = await DeliverySlotsAdminService.list();
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -31,7 +31,7 @@ async function create(req, res) {
             payload: body,
         });
 
-        return Response.created(res, data);
+        return Response.created(res, 201, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -53,7 +53,7 @@ async function update(req, res) {
             payload: body,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -75,7 +75,7 @@ async function setActive(req, res) {
             is_active: body.is_active,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);

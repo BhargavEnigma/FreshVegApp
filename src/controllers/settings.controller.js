@@ -7,7 +7,7 @@ const SettingsService = require("../services/settings.service");
 async function publicSettings(req, res) {
     try {
         const data = await SettingsService.publicSettings();
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);

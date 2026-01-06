@@ -10,7 +10,7 @@ async function webhook(req, res) {
         rawBody: req.rawBody || JSON.stringify(req.body || {}),
     });
 
-    return Response.ok(res, data);
+    return Response.ok(res, 200, data);
 }
 
 module.exports = { webhook };
