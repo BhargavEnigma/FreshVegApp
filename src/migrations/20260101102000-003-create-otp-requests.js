@@ -3,6 +3,41 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
     async up(queryInterface, Sequelize) {
+
+const safeAddIndex = async (table, fields, options) => {
+    try {
+        await queryInterface.addIndex(table, fields, options);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
+const safeQuery = async (sql) => {
+    try {
+        await queryInterface.sequelize.query(sql);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
         await queryInterface.createTable("otp_requests", {
             id: {
                 type: Sequelize.UUID,
@@ -62,21 +97,21 @@ module.exports = {
             },
         });
 
-        await queryInterface.addIndex("otp_requests", ["phone", "created_at"], {
+        await safeAddIndex("otp_requests", ["phone", "created_at"], {
             name: "otp_requests_phone_created_idx",
         });
 
-        await queryInterface.addIndex("otp_requests", ["status"], {
+        await safeAddIndex("otp_requests", ["status"], {
             name: "otp_requests_status_idx",
         });
 
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE otp_requests
             ADD CONSTRAINT otp_requests_purpose_check
             CHECK (purpose IN ('login'));
         `);
 
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE otp_requests
             ADD CONSTRAINT otp_requests_status_check
             CHECK (status IN ('sent', 'verified', 'failed', 'expired'));

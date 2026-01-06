@@ -3,6 +3,41 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
     async up(queryInterface, Sequelize) {
+
+const safeAddIndex = async (table, fields, options) => {
+    try {
+        await queryInterface.addIndex(table, fields, options);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
+const safeQuery = async (sql) => {
+    try {
+        await queryInterface.sequelize.query(sql);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
         await queryInterface.createTable("order_items", {
             id: {
                 type: Sequelize.UUID,
@@ -51,19 +86,19 @@ module.exports = {
             },
         });
 
-        await queryInterface.addIndex("order_items", ["order_id"], {
+        await safeAddIndex("order_items", ["order_id"], {
             name: "order_items_order_idx",
         });
 
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE order_items
             ADD CONSTRAINT order_items_quantity_check CHECK (quantity >= 0.001);
         `);
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE order_items
             ADD CONSTRAINT order_items_unit_price_paise_check CHECK (unit_price_paise >= 0);
         `);
-        await queryInterface.sequelize.query(`
+        await safeQuery(`
             ALTER TABLE order_items
             ADD CONSTRAINT order_items_line_total_paise_check CHECK (line_total_paise >= 0);
         `);

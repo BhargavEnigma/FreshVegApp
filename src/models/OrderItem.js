@@ -18,6 +18,14 @@ module.exports = (sequelize, DataTypes) => {
                 type: DataTypes.UUID,
                 allowNull: false,
             },
+            product_pack_id: {
+                type: DataTypes.UUID,
+                allowNull: true,
+            },
+            pack_label: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
             product_name: {
                 type: DataTypes.TEXT,
                 allowNull: false,
@@ -55,6 +63,7 @@ module.exports = (sequelize, DataTypes) => {
     OrderItem.associate = (db) => {
         OrderItem.belongsTo(db.Order, { foreignKey: "order_id", as: "order" });
         OrderItem.belongsTo(db.Product, { foreignKey: "product_id", as: "product" });
+        OrderItem.belongsTo(db.ProductPack, { foreignKey: "product_pack_id", as: "pack" });
     };
 
     return OrderItem;

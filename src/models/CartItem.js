@@ -18,6 +18,11 @@ module.exports = (sequelize, DataTypes) => {
                 type: DataTypes.UUID,
                 allowNull: false,
             },
+            // add inside CartItem fields
+            product_pack_id: {
+                type: DataTypes.UUID,
+                allowNull: false,
+            },
             quantity: {
                 type: DataTypes.DECIMAL(10, 3),
                 allowNull: false,
@@ -37,15 +42,17 @@ module.exports = (sequelize, DataTypes) => {
             updatedAt: "updated_at",
             indexes: [
                 { name: "cart_items_cart_idx", fields: ["cart_id"] },
-                // recommended unique: (cart_id, product_id)
-                { name: "cart_items_unique_cart_product", unique: true, fields: ["cart_id", "product_id"] },
+                { name: "cart_items_pack_id_idx", fields: ["product_pack_id"] },
+                { name: "cart_items_unique_cart_pack", unique: true, fields: ["cart_id", "product_pack_id"] },
             ],
+
         }
     );
 
     CartItem.associate = (db) => {
         CartItem.belongsTo(db.Cart, { foreignKey: "cart_id", as: "cart" });
         CartItem.belongsTo(db.Product, { foreignKey: "product_id", as: "product" });
+        CartItem.belongsTo(db.ProductPack, { foreignKey: "product_pack_id", as: "pack" });
     };
 
     return CartItem;

@@ -70,6 +70,7 @@ module.exports = (sequelize, DataTypes) => {
         Product.hasMany(db.ProductImage, { foreignKey: "product_id", as: "images" });
         Product.hasMany(db.CartItem, { foreignKey: "product_id", as: "cart_items" });
         Product.hasMany(db.OrderItem, { foreignKey: "product_id", as: "order_items" });
+        Product.hasMany(db.ProductPack, { foreignKey: "product_id", as: "packs" });
     };
 
     return Product;

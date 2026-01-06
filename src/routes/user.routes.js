@@ -6,5 +6,6 @@ const UserController = require("../controllers/user.controller");
 const router = express.Router();
 
 router.get("/me", requireAuth, asyncHandler(UserController.me));
+router.put("/profile", requireAuth, asyncHandler(UserController.updateProfile));
 
 module.exports = router;

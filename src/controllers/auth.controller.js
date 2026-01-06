@@ -18,6 +18,8 @@ function getClientMeta(req) {
 
 async function sendOtp(req, res) {
     try {
+        console.log("SEND OTP :", req.body);
+
         const body = sendOtpSchema.parse(req.body);
         const meta = getClientMeta(req);
 
@@ -29,13 +31,36 @@ async function sendOtp(req, res) {
 
         return ResponseUtil.ok(res, data);
     } catch (e) {
+        // ✅ Always log actual error for debugging
+        console.error("SEND OTP ERROR:", {
+            name: e?.name,
+            code: e?.code,
+            message: e?.message,
+            httpStatus: e?.httpStatus,
+            axiosStatus: e?.response?.status,
+            axiosData: e?.response?.data,
+            stack: e?.stack,
+        });
+
+        // ✅ AppError path (your services throw this)
         if (e instanceof AppError) {
-            return ResponseUtil.fail(res, e.code, e.message, e.httpStatus);
+            return ResponseUtil.fail(
+                res,
+                e.httpStatus || 500,
+                e.code || "PROVIDER_ERROR",
+                e.message || "Something went wrong",
+                e.details || e?.response?.data || null
+            );
         }
+
+        // ✅ Zod validation
         if (e?.name === "ZodError") {
-            return ResponseUtil.fail(res, "INVALID_PHONE", "Invalid request body", 400);
+            return ResponseUtil.fail(res, 400, "INVALID_PHONE", "Invalid request body", e.issues ?? null);
         }
-        return ResponseUtil.fail(res, "PROVIDER_ERROR", "Something went wrong", 500);
+
+        // ✅ Axios / unknown error
+        const details = e?.response?.data || { message: e?.message };
+        return ResponseUtil.fail(res, 500, "PROVIDER_ERROR", "Something went wrong", details);
     }
 }
 
@@ -54,13 +79,27 @@ async function verifyOtp(req, res) {
 
         return ResponseUtil.ok(res, data);
     } catch (e) {
+        console.error("VERIFY OTP ERROR:", {
+            name: e?.name,
+            code: e?.code,
+            message: e?.message,
+            httpStatus: e?.httpStatus,
+            axiosStatus: e?.response?.status,
+            axiosData: e?.response?.data,
+            stack: e?.stack,
+        });
+
         if (e instanceof AppError) {
-            return ResponseUtil.fail(res, e.code, e.message, e.httpStatus);
+            return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
+
         if (e?.name === "ZodError") {
-            return ResponseUtil.fail(res, "INVALID_OTP", "Invalid request body", 400);
+            return ResponseUtil.fail(res, 400, "INVALID_OTP", "Invalid request body", e.issues ?? null);
         }
-        return ResponseUtil.fail(res, "PROVIDER_ERROR", "Something went wrong", 500);
+
+        // Sequelize errors / unknown errors
+        const details = e?.response?.data || e?.errors || { message: e?.message };
+        return ResponseUtil.fail(res, 500, "PROVIDER_ERROR", "Something went wrong", details);
     }
 }
 
@@ -76,12 +115,12 @@ async function refreshToken(req, res) {
         return ResponseUtil.ok(res, data);
     } catch (e) {
         if (e instanceof AppError) {
-            return ResponseUtil.fail(res, e.code, e.message, e.httpStatus);
+            return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
         if (e?.name === "ZodError") {
-            return ResponseUtil.fail(res, "INVALID_REFRESH_TOKEN", "Invalid request body", 400);
+            return ResponseUtil.fail(res, 400, "INVALID_REFRESH_TOKEN", "Invalid request body");
         }
-        return ResponseUtil.fail(res, "INVALID_REFRESH_TOKEN", "Unable to refresh token", 401);
+        return ResponseUtil.fail(res, 401, "INVALID_REFRESH_TOKEN", "Unable to refresh token");
     }
 }
 
@@ -97,12 +136,13 @@ async function logout(req, res) {
         return ResponseUtil.ok(res, data);
     } catch (e) {
         if (e instanceof AppError) {
-            return ResponseUtil.fail(res, e.code, e.message, e.httpStatus);
+            return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
+
         if (e?.name === "ZodError") {
-            return ResponseUtil.fail(res, "INVALID_REFRESH_TOKEN", "Invalid request body", 400);
+            return ResponseUtil.fail(res, 400, "INVALID_REFRESH_TOKEN", "Invalid request body");
         }
-        return ResponseUtil.fail(res, "UNAUTHORIZED", "Unable to logout", 401);
+        return ResponseUtil.fail(res, 401, "UNAUTHORIZED", "Unable to logout");
     }
 }
 
@@ -112,9 +152,9 @@ async function me(req, res) {
         return ResponseUtil.ok(res, data);
     } catch (e) {
         if (e instanceof AppError) {
-            return ResponseUtil.fail(res, e.code, e.message, e.httpStatus);
+            return ResponseUtil.fail(res, e.httpStatus, e.code, e.message);
         }
-        return ResponseUtil.fail(res, "USER_NOT_FOUND", "User not found", 404);
+        return ResponseUtil.fail(res, 404, "USER_NOT_FOUND", "User not found");
     }
 }
 

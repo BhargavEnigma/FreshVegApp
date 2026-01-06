@@ -3,6 +3,41 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
     async up(queryInterface, Sequelize) {
+
+const safeAddIndex = async (table, fields, options) => {
+    try {
+        await queryInterface.addIndex(table, fields, options);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
+const safeQuery = async (sql) => {
+    try {
+        await queryInterface.sequelize.query(sql);
+    } catch (e) {
+        const msg = String(e?.message || "");
+        if (
+            msg.includes("already exists") ||
+            msg.includes("Duplicate") ||
+            msg.includes("duplicate") ||
+            msg.includes("exists")
+        ) {
+            return;
+        }
+        throw e;
+    }
+};
+
         await queryInterface.createTable("user_addresses", {
             id: {
                 type: Sequelize.UUID,
@@ -43,8 +78,8 @@ module.exports = {
         });
 
         // Indexes
-        await queryInterface.addIndex("user_addresses", ["user_id"], { name: "user_addresses_user_id_idx" });
-        await queryInterface.addIndex("user_addresses", ["user_id", "is_default"], { name: "user_addresses_default_idx" });
+        await safeAddIndex("user_addresses", ["user_id"], { name: "user_addresses_user_id_idx" });
+        await safeAddIndex("user_addresses", ["user_id", "is_default"], { name: "user_addresses_default_idx" });
     },
 
     async down(queryInterface) {
