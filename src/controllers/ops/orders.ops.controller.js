@@ -19,7 +19,7 @@ async function list(req, res) {
             query,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         console.error("OPS LIST ORDERS ERROR:", e?.message, e?.stack);
         if (e instanceof AppError) {
@@ -44,7 +44,7 @@ async function updateStatus(req, res) {
             note: body.note ?? null,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         console.error("OPS UPDATE STATUS ERROR:", e?.message, e?.stack);
         if (e instanceof AppError) {

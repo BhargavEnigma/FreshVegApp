@@ -12,7 +12,7 @@ const {
 async function list(req, res) {
     try {
         const data = await SettingsAdminService.list();
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -29,7 +29,7 @@ async function getByKey(req, res) {
             key: params.key,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -51,7 +51,7 @@ async function upsert(req, res) {
             value: body.value,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);

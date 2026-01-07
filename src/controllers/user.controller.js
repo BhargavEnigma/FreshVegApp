@@ -8,7 +8,7 @@ const UsersService = require("../services/users.service");
 async function me(req, res) {
     try {
         const data = await UsersService.getMe({ userId: req.user.userId });
-        return ResponseUtil.ok(res, data);
+        return ResponseUtil.ok(res, 200, data);
     } catch (e) {
         console.error("USER ME ERROR:", e?.message, e?.stack);
         if (e instanceof AppError) {
@@ -29,7 +29,7 @@ async function updateProfile(req, res) {
             fcm_token: body.fcm_token ?? null,
         });
 
-        return ResponseUtil.ok(res, data);
+        return ResponseUtil.ok(res, 200, data);
     } catch (e) {
         console.error("UPDATE PROFILE ERROR:", {
             name: e?.name,

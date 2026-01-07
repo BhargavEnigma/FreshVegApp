@@ -1,15 +1,17 @@
-function ok(res, data = null, message = null) {
+function ok(res, code, data = null, message = null) {
     return res.status(200).json({
         success: true,
+        status: code,
         data,
         error: null,
         message
     });
 }
 
-function created(res, data = null, message = null) {
+function created(res, code, data = null, message = null) {
     return res.status(201).json({
         success: true,
+        status: code,
         data,
         error: null,
         message

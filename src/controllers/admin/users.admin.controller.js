@@ -14,7 +14,7 @@ async function create(req, res) {
         payload: body,
     });
 
-    return ResponseUtil.created(res, data);
+    return ResponseUtil.created(res, 201, data);
 }
 
 async function setRoles(req, res) {
@@ -25,7 +25,7 @@ async function setRoles(req, res) {
         roles: body.roles,
     });
 
-    return ResponseUtil.ok(res, data);
+    return ResponseUtil.ok(res, 200, data);
 }
 
 module.exports = {

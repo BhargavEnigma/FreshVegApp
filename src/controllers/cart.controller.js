@@ -14,7 +14,7 @@ async function getMyCart(req, res) {
             userId: req.user.userId,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         console.error("GET CART ERROR:", {
             name: e?.name,
@@ -42,7 +42,7 @@ async function addItem(req, res) {
             payload: body,
         });
 
-        return Response.created(res, data, "Item added in Cart");
+        return Response.created(res, 201, data, "Item added in Cart");
     } catch (e) {
         console.log('ERROR : ', e);
 
@@ -67,7 +67,7 @@ async function updateItem(req, res) {
             payload: body,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         console.error("UPDATE CART ITEM ERROR:", {
             name: e?.name,
@@ -97,7 +97,7 @@ async function removeItem(req, res) {
             itemId: params.itemId,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         console.error("REMOVE CART ITEM ERROR:", {
             name: e?.name,
@@ -124,7 +124,7 @@ async function clear(req, res) {
             userId: req.user.userId,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         console.error("CLEAR CART ERROR:", {
             name: e?.name,

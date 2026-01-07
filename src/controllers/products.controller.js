@@ -13,7 +13,7 @@ async function list(req, res) {
 
         const data = await ProductsService.list({ query });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         console.error("LIST PRODUCTS ERROR:", {
             name: e?.name,
@@ -42,7 +42,7 @@ async function getById(req, res) {
             productId: params.productId,
         });
 
-        return Response.ok(res, data);
+        return Response.ok(res, 200, data);
     } catch (e) {
         console.error("GET PRODUCT ERROR:", {
             name: e?.name,

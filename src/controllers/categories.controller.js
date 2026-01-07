@@ -26,7 +26,7 @@ async function listPublic(req, res) {
     try {
         const query = listPublicSchema.parse(req.query);
         const data = await CategoriesService.listPublic({ q: query.q || null });
-        return ResponseUtil.ok(res, { categories: data });
+        return ResponseUtil.ok(res, 200, { categories: data });
     } catch (e) {
         return handleError(res, e);
     }
@@ -39,7 +39,7 @@ async function listOps(req, res) {
             q: query.q || null,
             include_inactive: query.include_inactive || false,
         });
-        return ResponseUtil.ok(res, { categories: data });
+        return ResponseUtil.ok(res, 200, { categories: data });
     } catch (e) {
         return handleError(res, e);
     }
@@ -49,7 +49,7 @@ async function getById(req, res) {
     try {
         const id = uuidSchema.parse(req.params.id);
         const row = await CategoriesService.getById(id);
-        return ResponseUtil.ok(res, { category: row });
+        return ResponseUtil.ok(res, 200, { category: row });
     } catch (e) {
         return handleError(res, e);
     }
@@ -64,7 +64,7 @@ async function create(req, res) {
             is_active: body.is_active ?? true,
             sort_order: body.sort_order ?? null,
         });
-        return ResponseUtil.created(res, { category: row });
+        return ResponseUtil.created(res, 201, { category: row });
     } catch (e) {
         return handleError(res, e);
     }
@@ -75,7 +75,7 @@ async function update(req, res) {
         const id = uuidSchema.parse(req.params.id);
         const body = updateCategorySchema.parse(req.body);
         const row = await CategoriesService.update(id, body);
-        return ResponseUtil.ok(res, { category: row });
+        return ResponseUtil.ok(res, 200, { category: row });
     } catch (e) {
         return handleError(res, e);
     }
@@ -99,7 +99,7 @@ async function toggleActive(req, res) {
         }
 
         const row = await CategoriesService.toggleActive(id, isActive);
-        return ResponseUtil.ok(res, { category: row });
+        return ResponseUtil.ok(res, 200, { category: row });
     } catch (e) {
         return handleError(res, e);
     }
@@ -109,7 +109,7 @@ async function reorder(req, res) {
     try {
         const body = reorderSchema.parse(req.body);
         await CategoriesService.reorder(body.items);
-        return ResponseUtil.ok(res, { reordered: true });
+        return ResponseUtil.ok(res, 200, { reordered: true });
     } catch (e) {
         return handleError(res, e);
     }
