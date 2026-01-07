@@ -86,7 +86,7 @@ async function checkout({ userId, payload }) {
                 { model: ProductPack, as: "pack", required: false },
             ],
             transaction: t,
-            lock: t.LOCK.UPDATE,
+            // lock: t.LOCK.UPDATE,
         });
 
         if (!items || items.length === 0) {
