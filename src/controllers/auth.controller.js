@@ -31,16 +31,7 @@ async function sendOtp(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        // ✅ Always log actual error for debugging
-        console.error("SEND OTP ERROR:", {
-            name: e?.name,
-            code: e?.code,
-            message: e?.message,
-            httpStatus: e?.httpStatus,
-            axiosStatus: e?.response?.status,
-            axiosData: e?.response?.data,
-            stack: e?.stack,
-        });
+        console.log('SEND ERROR : ', e);
 
         // ✅ AppError path (your services throw this)
         if (e instanceof AppError) {
@@ -79,15 +70,7 @@ async function verifyOtp(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        console.error("VERIFY OTP ERROR:", {
-            name: e?.name,
-            code: e?.code,
-            message: e?.message,
-            httpStatus: e?.httpStatus,
-            axiosStatus: e?.response?.status,
-            axiosData: e?.response?.data,
-            stack: e?.stack,
-        });
+        console.log('ERROR VERIFY : ', e);
 
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
