@@ -23,12 +23,6 @@ function generateOrderNumber() {
     return `FV${now}${rnd}`;
 }
 
-function parseYyyyMmDd(dateStr) {
-    if (!dateStr) return null;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
-    return dateStr;
-}
-
 async function getDefaultWarehouseId({ t }) {
     const wh = await Warehouse.findOne({
         where: { is_active: true },
@@ -59,60 +53,21 @@ function getIstYyyyMmDd() {
     return `${y}-${m}-${d}`;
 }
 
-function getIstHourMinute() {
-    const parts = new Intl.DateTimeFormat("en-GB", {
-        timeZone: "Asia/Kolkata",
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-    }).formatToParts(new Date());
-
-    const hh = Number(parts.find((p) => p.type === "hour").value);
-    const mm = Number(parts.find((p) => p.type === "minute").value);
-    return { hh, mm };
-}
-
 function addDays(yyyyMmDd, days) {
-    const [y, m, d] = yyyyMmDd.split("-").map(Number);
+    const [y, m, d] = String(yyyyMmDd).split("-").map(Number);
     const dt = new Date(Date.UTC(y, m - 1, d));
-    dt.setUTCDate(dt.getUTCDate() + days);
+    dt.setUTCDate(dt.getUTCDate() + Number(days || 0));
     const yy = dt.getUTCFullYear();
     const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
     const dd = String(dt.getUTCDate()).padStart(2, "0");
     return `${yy}-${mm}-${dd}`;
 }
 
-async function ensureDeliveryDateValid({ delivery_date }) {
-    if (!delivery_date) return;
-
-    const d = parseYyyyMmDd(delivery_date);
-    if (!d) {
-        throw new AppError("INVALID_DELIVERY_DATE", "Invalid delivery_date format", 400);
-    }
-
-    const todayIst = getIstYyyyMmDd();
-    if (d < todayIst) {
-        throw new AppError("INVALID_DELIVERY_DATE", "delivery_date cannot be in the past", 400);
-    }
-
-    // ✅ Blueprint cutoff: orders must be placed by 11:59 PM IST for next-morning delivery
-    // If user requests "tomorrow" after cutoff (i.e. after 23:59), block.
-    const { hh, mm } = getIstHourMinute();
-    const afterCutoff = hh === 0 ? false : (hh > 23 || (hh === 23 && mm >= 59)); // practical guard
-
-    const tomorrowIst = addDays(todayIst, 1);
-    if (afterCutoff && d === tomorrowIst) {
-        throw new AppError(
-            "ORDER_CUTOFF_PASSED",
-            "Cutoff passed for next-day delivery. Please choose a later delivery date.",
-            409
-        );
-    }
-}
-
 async function checkout({ userId, payload }) {
     return sequelize.transaction(async (t) => {
-        await ensureDeliveryDateValid({ delivery_date: payload.delivery_date ?? null });
+        // ✅ New rule: always next-day delivery (IST)
+        const todayIst = getIstYyyyMmDd();
+        const deliveryDate = addDays(todayIst, 1);
 
         const cart = await Cart.findOne({
             where: { user_id: userId, status: "active" },
@@ -188,8 +143,9 @@ async function checkout({ userId, payload }) {
                 user_id: userId,
                 warehouse_id: warehouseId,
                 address_id: address.id,
-                delivery_date: payload.delivery_date,
-                delivery_slot_id: payload.delivery_slot_id ?? null,
+
+                delivery_date: deliveryDate,
+                delivery_slot_id: null, // anytime next day
 
                 status: initialStatus,
                 payment_method: payload.payment_method,
@@ -241,7 +197,6 @@ async function checkout({ userId, payload }) {
 
         await cart.update({ status: "checked_out" }, { transaction: t });
 
-        // ✅ COD payment must be "paid" immediately
         const payment = await Payment.create(
             {
                 order_id: order.id,
@@ -276,6 +231,7 @@ async function checkout({ userId, payload }) {
                 payment_status: order.payment_status,
                 total_paise,
                 warehouse_id: order.warehouse_id,
+                delivery_date: order.delivery_date,
             },
             payment: {
                 id: payment.id,
