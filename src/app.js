@@ -35,6 +35,8 @@ app.disable("x-powered-by");
 
 app.use(helmet());
 
+app.use("/v1/health", healthRoutes);
+
 // src/app.js (add before app.use(express.json()))
 app.use((req, res, next) => {
     if (req.originalUrl === "/v1/payments/webhook") {
