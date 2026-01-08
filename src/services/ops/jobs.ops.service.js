@@ -1,6 +1,6 @@
 "use strict";
 
-const { sequelize, JobRun, Order, OrderStatusEvent } = require("../../models");
+const { sequelize, JobRun, Order, OrderStatusEvent, Notification } = require("../../models");
 const { AppError } = require("../../utils/errors");
 
 async function lockOrdersForDate({ delivery_date }) {
@@ -74,6 +74,25 @@ async function lockOrdersForDate({ delivery_date }) {
                 actor_user_id: null,
                 note: "scheduler_lock",
                 meta: { delivery_date },
+            })),
+            { transaction: t }
+        );
+
+        // ✅ Queue push notifications for locked orders
+        await Notification.bulkCreate(
+            eligible.map((o) => ({
+                user_id: o.user_id,
+                channel: "push",
+                template: "order_locked",
+                payload: {
+                    order_id: o.id,
+                    delivery_date,
+                    from_status: o.status,
+                    to_status: "locked",
+                },
+                status: "queued",
+                attempt_count: 0,
+                scheduled_at: null,
             })),
             { transaction: t }
         );

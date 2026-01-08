@@ -23,6 +23,10 @@ module.exports = (sequelize, DataTypes) => {
                 type: DataTypes.TEXT,
                 allowNull: true,
             },
+            fcm_token: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
             status: {
                 type: DataTypes.TEXT,
                 allowNull: false,

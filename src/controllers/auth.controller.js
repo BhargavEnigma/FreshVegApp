@@ -65,6 +65,7 @@ async function verifyOtp(req, res) {
             phone: body.phone,
             otp: body.otp,
             device: body.device || null,
+            fcm_token: body.fcm_token ?? null,
             ...meta,
         });
 
