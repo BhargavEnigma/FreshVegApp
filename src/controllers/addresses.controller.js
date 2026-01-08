@@ -14,7 +14,7 @@ async function list(req, res) {
         const data = await AddressesService.list({ userId: req.user.userId });
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        console.error("LIST ADDRESSES ERROR:", e?.message, e?.stack);
+        console.error("LIST ADDRESSES ERROR:", e);
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -33,15 +33,7 @@ async function create(req, res) {
 
         return ResponseUtil.created(res, 201, data);
     } catch (e) {
-        console.log('ERROR ____', e);
-        // console.error("CREATE ADDRESS ERROR:", {
-        //     name: e?.name,
-        //     code: e?.code,
-        //     message: e?.message,
-        //     httpStatus: e?.httpStatus,
-        //     issues: e?.issues,
-        //     stack: e?.stack,
-        // });
+        console.log('CREATE ADDRESS ERROR ____', e);
 
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -66,14 +58,7 @@ async function update(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        console.error("UPDATE ADDRESS ERROR:", {
-            name: e?.name,
-            code: e?.code,
-            message: e?.message,
-            httpStatus: e?.httpStatus,
-            issues: e?.issues,
-            stack: e?.stack,
-        });
+        console.log('UPDATE ADDRESS ERROR: ____', e);
 
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -96,7 +81,7 @@ async function remove(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        console.error("DELETE ADDRESS ERROR:", e?.message, e?.stack);
+        console.error("DELETE ADDRESS ERROR:", e);
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -115,7 +100,7 @@ async function setDefault(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        console.error("SET DEFAULT ADDRESS ERROR:", e?.message, e?.stack);
+        console.error("SET DEFAULT ADDRESS ERROR:", e);
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }

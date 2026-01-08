@@ -15,14 +15,7 @@ async function list(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.error("LIST PRODUCTS ERROR:", {
-            name: e?.name,
-            code: e?.code,
-            message: e?.message,
-            httpStatus: e?.httpStatus,
-            issues: e?.issues,
-            stack: e?.stack,
-        });
+        console.error("LIST PRODUCTS ERROR:", e);
 
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, null);
@@ -44,14 +37,7 @@ async function getById(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.error("GET PRODUCT ERROR:", {
-            name: e?.name,
-            code: e?.code,
-            message: e?.message,
-            httpStatus: e?.httpStatus,
-            issues: e?.issues,
-            stack: e?.stack,
-        });
+        console.error("GET PRODUCT ERROR:", e);
 
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, null);

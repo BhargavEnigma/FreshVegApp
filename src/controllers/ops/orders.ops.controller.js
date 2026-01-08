@@ -21,7 +21,7 @@ async function list(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.error("OPS LIST ORDERS ERROR:", e?.message, e?.stack);
+        console.error("OPS LIST ORDERS ERROR:", e);
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -46,7 +46,7 @@ async function updateStatus(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.error("OPS UPDATE STATUS ERROR:", e?.message, e?.stack);
+        console.error("OPS UPDATE STATUS ERROR:", e);
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }

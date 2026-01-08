@@ -28,6 +28,7 @@ async function listPublic(req, res) {
         const data = await CategoriesService.listPublic({ q: query.q || null });
         return ResponseUtil.ok(res, 200, { categories: data });
     } catch (e) {
+        console.log('LIST PUBLIC CATEGORY : ', e);
         return handleError(res, e);
     }
 }
@@ -41,6 +42,7 @@ async function listOps(req, res) {
         });
         return ResponseUtil.ok(res, 200, { categories: data });
     } catch (e) {
+        console.log('LIST OPS ERROR : ', e);
         return handleError(res, e);
     }
 }
@@ -51,6 +53,7 @@ async function getById(req, res) {
         const row = await CategoriesService.getById(id);
         return ResponseUtil.ok(res, 200, { category: row });
     } catch (e) {
+        console.log('GET CATEGORY BY ID : ', e);
         return handleError(res, e);
     }
 }
@@ -66,6 +69,7 @@ async function create(req, res) {
         });
         return ResponseUtil.created(res, 201, { category: row });
     } catch (e) {
+        console.log('CREATE CATEGORY ERROR : ', e);
         return handleError(res, e);
     }
 }
@@ -77,6 +81,7 @@ async function update(req, res) {
         const row = await CategoriesService.update(id, body);
         return ResponseUtil.ok(res, 200, { category: row });
     } catch (e) {
+        console.log('UPDATE CATEGORY ERROR : ', e);
         return handleError(res, e);
     }
 }
@@ -101,6 +106,7 @@ async function toggleActive(req, res) {
         const row = await CategoriesService.toggleActive(id, isActive);
         return ResponseUtil.ok(res, 200, { category: row });
     } catch (e) {
+        console.log('TOGGLE CATEGORY ACTIVE/INACTIVE ERROR : ', e);
         return handleError(res, e);
     }
 }
@@ -111,6 +117,7 @@ async function reorder(req, res) {
         await CategoriesService.reorder(body.items);
         return ResponseUtil.ok(res, 200, { reordered: true });
     } catch (e) {
+        console.log('REORDER CATEGORY ERROR : ', e);
         return handleError(res, e);
     }
 }

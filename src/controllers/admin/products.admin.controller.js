@@ -39,6 +39,7 @@ async function update(req, res) {
         const data = await AdminProductsService.updateProduct({ productId: params.productId, payload: body });
         return Response.ok(res, 200, data);
     } catch (e) {
+        console.log('UPDATE PRODUCT ERROR : ', e);
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -56,6 +57,7 @@ async function setActive(req, res) {
         const data = await AdminProductsService.setProductActive({ productId: params.productId, is_active: body.is_active });
         return Response.ok(res, 200, data);
     } catch (e) {
+        console.log('SET ACTIVE PRODUCT ERROR : ', e);
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -79,6 +81,8 @@ async function createPack(req, res) {
 
         return Response.created(res, 201, data);
     } catch (e) {
+        console.log('CREATE PRODUCT PACK ERROR : ', e);
+
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -101,6 +105,8 @@ async function updatePack(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
+        console.log('CREATE PRODUCT PACK ERROR : ', e);
+
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -123,6 +129,8 @@ async function setPackActive(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
+        console.log('CREATE PRODUCT PACK ACTIVE ERROR : ', e);
+
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -143,6 +151,8 @@ async function deletePack(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
+        console.log('DELETE PRODUCT PACK ERROR : ', e);
+
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }

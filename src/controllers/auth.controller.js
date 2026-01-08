@@ -70,7 +70,7 @@ async function verifyOtp(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        console.log('ERROR VERIFY : ', e);
+        console.log('ERROR OTP VERIFY : ', e);
 
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
@@ -97,6 +97,8 @@ async function refreshToken(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
+        console.log('ERROR REFRESH TOKEN : ', e);
+        
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -118,6 +120,8 @@ async function logout(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
+        console.log('ERROR LOGOUT : ', e);
+
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -134,6 +138,8 @@ async function me(req, res) {
         const data = await AuthService.getMe({ userId: req.user.userId });
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
+        console.log('ERROR GET ME : ', e);
+
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus, e.code, e.message);
         }
