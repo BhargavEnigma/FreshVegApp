@@ -16,14 +16,7 @@ async function getMyCart(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.error("GET CART ERROR:", {
-            name: e?.name,
-            code: e?.code,
-            message: e?.message,
-            httpStatus: e?.httpStatus,
-            issues: e?.issues,
-            stack: e?.stack,
-        });
+        console.error("GET CART ERROR:", e);
 
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, null);
@@ -44,7 +37,7 @@ async function addItem(req, res) {
 
         return Response.created(res, 201, data, "Item added in Cart");
     } catch (e) {
-        console.log('ERROR : ', e);
+        console.log('ADD CART ERROR : ', e);
 
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, null);
@@ -69,14 +62,7 @@ async function updateItem(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.error("UPDATE CART ITEM ERROR:", {
-            name: e?.name,
-            code: e?.code,
-            message: e?.message,
-            httpStatus: e?.httpStatus,
-            issues: e?.issues,
-            stack: e?.stack,
-        });
+        console.error("UPDATE CART ITEM ERROR:", e);
 
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, null);
@@ -99,14 +85,7 @@ async function removeItem(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.error("REMOVE CART ITEM ERROR:", {
-            name: e?.name,
-            code: e?.code,
-            message: e?.message,
-            httpStatus: e?.httpStatus,
-            issues: e?.issues,
-            stack: e?.stack,
-        });
+        console.error("REMOVE CART ITEM ERROR:", e);
 
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, null);
@@ -126,14 +105,7 @@ async function clear(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.error("CLEAR CART ERROR:", {
-            name: e?.name,
-            code: e?.code,
-            message: e?.message,
-            httpStatus: e?.httpStatus,
-            issues: e?.issues,
-            stack: e?.stack,
-        });
+        console.error("CLEAR CART ERROR:", e);
 
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, null);

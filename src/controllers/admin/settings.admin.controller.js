@@ -14,6 +14,8 @@ async function list(req, res) {
         const data = await SettingsAdminService.list();
         return Response.ok(res, 200, data);
     } catch (e) {
+        console.log('GET SETTINGS LIST ERROR ADMIN : ', e);
+        
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -31,6 +33,8 @@ async function getByKey(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
+        console.log('GET SETTINGS BY KEY ERROR ADMIN : ', e);
+
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -53,6 +57,8 @@ async function upsert(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
+        console.log('UPSERT SETTINGS ERROR ADMIN : ', e);
+
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }

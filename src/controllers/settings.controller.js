@@ -9,6 +9,8 @@ async function publicSettings(req, res) {
         const data = await SettingsService.publicSettings();
         return Response.ok(res, 200, data);
     } catch (e) {
+        console.log('GET ALL PUBLIC SETTINGS ERROR : ', e);
+
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }

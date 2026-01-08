@@ -15,14 +15,6 @@ async function checkout(req, res) {
         return Response.created(res, 201, data);
     } catch (e) {
         console.log('ERROR :', e);
-        // console.error("CHECKOUT ERROR:", {
-        //     name: e?.name,
-        //     code: e?.code,
-        //     message: e?.message,
-        //     httpStatus: e?.httpStatus,
-        //     issues: e?.issues,
-        //     stack: e?.stack,
-        // });
 
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, null);

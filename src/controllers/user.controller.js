@@ -10,7 +10,7 @@ async function me(req, res) {
         const data = await UsersService.getMe({ userId: req.user.userId });
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        console.error("USER ME ERROR:", e?.message, e?.stack);
+        console.error("USER ME ERROR:", e);
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -31,14 +31,7 @@ async function updateProfile(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        console.error("UPDATE PROFILE ERROR:", {
-            name: e?.name,
-            code: e?.code,
-            message: e?.message,
-            httpStatus: e?.httpStatus,
-            issues: e?.issues,
-            stack: e?.stack,
-        });
+        console.error("UPDATE PROFILE ERROR:", e);
 
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);

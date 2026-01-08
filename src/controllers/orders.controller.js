@@ -21,7 +21,7 @@ async function listMyOrders(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.error("LIST MY ORDERS ERROR:", e?.message, e?.stack);
+        console.error("LIST MY ORDERS ERROR:", e);
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -43,7 +43,7 @@ async function getMyOrderById(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.error("GET MY ORDER ERROR:", e?.message, e?.stack);
+        console.error("GET MY ORDER ERROR:", e);
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -67,7 +67,7 @@ async function cancelMyOrder(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.error("CANCEL ORDER ERROR:", e?.message, e?.stack);
+        console.error("CANCEL ORDER ERROR:", e);
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
