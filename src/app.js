@@ -25,6 +25,7 @@ const opsJobsRoutes = require("./routes/ops/jobs.ops.routes");
 
 // ✅ NEW: admin users management routes
 const adminUsersRoutes = require("./routes/admin/users.admin.routes");
+const adminDashboardRoutes = require("./routes/admin/dashboard.admin.routes");
 
 const { env } = require("./config/env");
 const { notFound, errorHandler } = require("./middlewares/error.middleware");
@@ -92,6 +93,7 @@ app.use("/v1/adminWarehouse", adminWarehouse);
 
 // ✅ NEW: Admin user/role management
 app.use("/v1/admin/users", adminUsersRoutes);
+app.use("/v1/admin/dashboard", adminDashboardRoutes);
 
 // Ops / Warehouse
 app.use("/v1/opsOrder", orderOpsRoutes);
