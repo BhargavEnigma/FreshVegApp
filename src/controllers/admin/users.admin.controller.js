@@ -5,6 +5,7 @@ const AdminUsersService = require("../../services/admin/users.admin.service");
 const {
     createAdminUserSchema,
     setRolesSchema,
+    listUsersQuerySchema,
 } = require("../../validations/admin/users.admin.validation");
 
 async function list(req, res) {
