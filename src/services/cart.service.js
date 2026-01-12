@@ -1,6 +1,6 @@
 "use strict";
 
-const { sequelize, Cart, CartItem, Product, ProductPack } = require("../models");
+const { sequelize, Cart, CartItem, Product, ProductPack, ProductImage } = require("../models");
 const { AppError } = require("../utils/errors");
 
 function toPaise(value) {
@@ -42,7 +42,12 @@ async function buildCartResponse({ cartId, t }) {
                 model: CartItem,
                 as: "items",
                 include: [
-                    { model: Product, as: "product", required: false },
+                    {
+                        model: Product,
+                        as: "product",
+                        required: false,
+                        include: [{ model: ProductImage, as: "images", required: false }],
+                    },
                     { model: ProductPack, as: "pack", required: true },
                 ],
             },
@@ -50,7 +55,23 @@ async function buildCartResponse({ cartId, t }) {
         transaction: t,
     });
 
-    const items = cart?.items || [];
+    const items = (cart?.items || []).map((it) => {
+        // Ensure deterministic image ordering for UI
+        try {
+            const json = it.toJSON();
+            if (json?.product?.images && Array.isArray(json.product.images)) {
+                json.product.images.sort((a, b) => {
+                    const soA = a.sort_order ?? 0;
+                    const soB = b.sort_order ?? 0;
+                    if (soA !== soB) return soA - soB;
+                    return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+                });
+            }
+            return json;
+        } catch (_e) {
+            return it;
+        }
+    });
 
     let subtotal_paise = 0;
     let total_qty = 0;

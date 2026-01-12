@@ -5,6 +5,8 @@ const {
     sequelize,
     Order,
     OrderItem,
+    Product,
+    ProductImage,
     UserAddress,
     Warehouse,
     OrderStatusEvent,
@@ -51,7 +53,19 @@ async function getMyOrderById({ userId, orderId }) {
         include: [
             { model: Warehouse, as: "warehouse", required: false },
             { model: UserAddress, as: "address", required: false },
-            { model: OrderItem, as: "items", required: false },
+            {
+                model: OrderItem,
+                as: "items",
+                required: false,
+                include: [
+                    {
+                        model: Product,
+                        as: "product",
+                        required: false,
+                        include: [{ model: ProductImage, as: "images", required: false }],
+                    },
+                ],
+            },
             {
                 model: OrderStatusEvent,
                 as: "status_events",
@@ -65,7 +79,22 @@ async function getMyOrderById({ userId, orderId }) {
         throw new AppError("ORDER_NOT_FOUND", "Order not found", 404);
     }
 
-    return { order };
+    // Ensure deterministic image ordering for UI
+    const json = order.toJSON();
+    if (Array.isArray(json.items)) {
+        for (const it of json.items) {
+            if (it?.product?.images && Array.isArray(it.product.images)) {
+                it.product.images.sort((a, b) => {
+                    const soA = a.sort_order ?? 0;
+                    const soB = b.sort_order ?? 0;
+                    if (soA !== soB) return soA - soB;
+                    return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+                });
+            }
+        }
+    }
+
+    return { order: json };
 }
 
 async function cancelMyOrder({ userId, orderId, reason }) {

@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const path = require("path");
 const healthRoutes = require("./routes/health.routes");
 const authRoutes = require("./routes/auth.routes");
 const usersRoutes = require("./routes/user.routes");
@@ -28,6 +29,7 @@ const adminUsersRoutes = require("./routes/admin/users.admin.routes");
 const adminDashboardRoutes = require("./routes/admin/dashboard.admin.routes");
 
 const { env } = require("./config/env");
+const { ensureDir, getUploadsRoot } = require("./utils/uploads");
 const { notFound, errorHandler } = require("./middlewares/error.middleware");
 
 const app = express();
@@ -35,6 +37,15 @@ const app = express();
 app.disable("x-powered-by");
 
 app.use(helmet());
+
+// Serve uploaded assets
+try {
+    const uploadsRoot = getUploadsRoot();
+    ensureDir(uploadsRoot);
+    app.use("/uploads", express.static(path.join(uploadsRoot)));
+} catch (e) {
+    // Do not crash app if uploads dir can't be created (still allow non-upload flows)
+}
 
 app.use("/v1/health", healthRoutes);
 
@@ -93,6 +104,8 @@ app.use("/v1/adminWarehouse", adminWarehouse);
 
 // ✅ NEW: Admin user/role management
 app.use("/v1/admin/users", adminUsersRoutes);
+
+// ✅ NEW: Admin dashboard KPIs
 app.use("/v1/admin/dashboard", adminDashboardRoutes);
 
 // Ops / Warehouse
