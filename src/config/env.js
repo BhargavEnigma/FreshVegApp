@@ -70,12 +70,10 @@ const env = {
     storageProvider: (process.env.STORAGE_PROVIDER || 'local').trim(),
 
     supabase: {
-        url: (process.env.DB_HOST || '').trim(),
+        url: (process.env.SUPABASE_URL || '').trim(),
         serviceRoleKey: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(),
         bucket: (process.env.SUPABASE_STORAGE_BUCKET || 'product-images').trim(),
-        // If your bucket is NOT public, set this true to generate signed URLs (requires extra work in client)
-        // For admin panel + customer apps, it's best to keep bucket public for product images.
-        bucketIsPublic: String(process.env.SUPABASE_BUCKET_PUBLIC || 'true').toLowerCase() === 'true',
+        bucketIsPublic: true,
     },
 
 };
