@@ -242,40 +242,39 @@ async function deleteProductImage({ imageId }) {
     });
 }
 
-async function attachUploadedImagesToProduct({ productId, files, t }) {
-    if (!files || !files.length) return [];
+async function attachUploadedImagesToProduct({ productId, uploaded, t }) {
+    // uploaded = [{ storage_provider, storage_path, image_url, mime_type, size_bytes, original_filename }, ...]
+    if (!uploaded?.length) return [];
 
-    // Start after last sort_order
-    const maxRow = await ProductImage.findOne({
+    // ✅ FIX: Postgres doesn't allow FOR UPDATE with aggregate functions like MAX().
+    // So we lock the last row by ordering instead of using MAX().
+    const last = await ProductImage.findOne({
         where: { product_id: productId },
-        attributes: [[sequelize.fn("MAX", sequelize.col("sort_order")), "max_sort_order"]],
+        order: [["sort_order", "DESC"]],
         transaction: t,
         lock: t.LOCK.UPDATE,
-        raw: true,
     });
-    const maxSort = Number(maxRow?.max_sort_order);
-    let sort = Number.isFinite(maxSort) ? maxSort + 1 : 0;
 
-    // Upload to configured storage provider (local or supabase)
-    const uploads = await StorageService.uploadProductImages({ productId, files });
+    const startSort = (last?.sort_order ?? 0) + 1;
 
-    const created = [];
-    for (const u of uploads) {
-        const row = await ProductImage.create(
-            {
-                product_id: productId,
-                image_url: u.url,
-                storage_provider: u.provider,
-                storage_path: u.storage_path || null,
-                sort_order: sort,
-            },
-            { transaction: t }
-        );
-        created.push(row);
-        sort += 1;
-    }
+    const rows = uploaded.map((u, idx) => ({
+        id: crypto.randomUUID(),
+        product_id: productId,
+        storage_provider: u.storage_provider || "supabase",
+        storage_path: u.storage_path || null,
+        image_url: u.image_url || null,
+        mime_type: u.mime_type || null,
+        size_bytes: u.size_bytes || null,
+        original_filename: u.original_filename || null,
+        sort_order: startSort + idx,
+        is_primary: startSort + idx === 1, // keep your existing rule if you have one
+        created_at: new Date(),
+        updated_at: new Date(),
+    }));
 
-    return created;
+    await ProductImage.bulkCreate(rows, { transaction: t });
+
+    return rows;
 }
 
 async function createProductWithImages({ payload, files }) {
