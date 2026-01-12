@@ -80,6 +80,8 @@ async function createWithImages(req, res) {
         const body = createProductSchema.parse(normalized);
 
         const files = Array.isArray(req.files) ? req.files : [];
+        console.log("FILES COUNT:", Array.isArray(req.files) ? req.files.length : 0);
+        console.log("FILES :", req.files ? req.files : "IMAGES NOT FOUND");
         const data = await AdminProductsService.createProductWithImages({ payload: body, files });
 
         return Response.created(res, 201, data, "Product created with images");
