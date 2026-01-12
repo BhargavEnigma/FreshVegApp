@@ -18,6 +18,15 @@ module.exports = (sequelize, DataTypes) => {
                 type: DataTypes.TEXT,
                 allowNull: false,
             },
+            storage_provider: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            storage_path: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+
             sort_order: {
                 type: DataTypes.INTEGER,
                 allowNull: true,

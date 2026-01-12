@@ -57,9 +57,10 @@ module.exports = (sequelize, DataTypes) => {
         User.hasMany(db.UserAddress, { foreignKey: "user_id", as: "addresses" });
         User.hasMany(db.OtpRequest, { foreignKey: "phone", sourceKey: "phone", as: "otp_requests" }); // by phone
         User.hasMany(db.UserSession, { foreignKey: "user_id", as: "sessions" });
+        // Additive association (no DB change). Enables admin user listing with roles.
+        User.hasMany(db.UserRole, { foreignKey: "user_id", as: "roles" });
         User.hasMany(db.Cart, { foreignKey: "user_id", as: "carts" });
         User.hasMany(db.Order, { foreignKey: "user_id", as: "orders" });
-        User.hasMany(db.UserRole, { foreignKey: "user_id", as: "roles" });
     };
 
     return User;

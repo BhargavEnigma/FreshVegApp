@@ -59,6 +59,14 @@ async function list({ query }) {
         if (Array.isArray(json.packs)) {
             json.packs.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
         }
+        if (Array.isArray(json.images)) {
+            json.images.sort((a, b) => {
+                const soA = a.sort_order ?? 0;
+                const soB = b.sort_order ?? 0;
+                if (soA !== soB) return soA - soB;
+                return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+            });
+        }
         return json;
     });
 
@@ -101,6 +109,14 @@ async function getById({ productId }) {
     const productJson = product.toJSON();
     if (Array.isArray(productJson.packs)) {
         productJson.packs.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    }
+    if (Array.isArray(productJson.images)) {
+        productJson.images.sort((a, b) => {
+            const soA = a.sort_order ?? 0;
+            const soB = b.sort_order ?? 0;
+            if (soA !== soB) return soA - soB;
+            return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+        });
     }
 
     return { product: productJson };

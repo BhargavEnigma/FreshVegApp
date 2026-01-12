@@ -56,6 +56,28 @@ const env = {
         bypassEnabled: parseBool(process.env.OTP_BYPASS_ENABLED, false),
         bypassCode: String(process.env.OTP_BYPASS_CODE || "1234").trim(),
     }
+    ,
+
+    // Optional: used to build absolute URLs for uploaded assets.
+    // Example: https://freshvegapp.onrender.com
+    publicBaseUrl: (process.env.PUBLIC_BASE_URL || "").trim(),
+
+    // Optional: where to store uploads on disk (relative to project root)
+    uploadsDir: (process.env.UPLOADS_DIR || "uploads").trim(),
+
+    // Storage (uploads)
+    // STORAGE_PROVIDER: 'local' (default) or 'supabase'
+    storageProvider: (process.env.STORAGE_PROVIDER || 'local').trim(),
+
+    supabase: {
+        url: (process.env.DB_HOST || '').trim(),
+        serviceRoleKey: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(),
+        bucket: (process.env.SUPABASE_STORAGE_BUCKET || 'product-images').trim(),
+        // If your bucket is NOT public, set this true to generate signed URLs (requires extra work in client)
+        // For admin panel + customer apps, it's best to keep bucket public for product images.
+        bucketIsPublic: String(process.env.SUPABASE_BUCKET_PUBLIC || 'true').toLowerCase() === 'true',
+    },
+
 };
 
 module.exports = { env };

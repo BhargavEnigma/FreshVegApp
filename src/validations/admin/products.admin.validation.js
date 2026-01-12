@@ -10,6 +10,10 @@ const packIdParamSchema = z.object({
     packId: z.string().uuid(),
 });
 
+const imageIdParamSchema = z.object({
+    imageId: z.string().uuid(),
+});
+
 const createProductSchema = z.object({
     category_id: z.string().uuid().nullable().optional(),
     name: z.string().min(2).max(150),
@@ -63,13 +67,39 @@ const setPackActiveSchema = z.object({
     is_active: z.boolean(),
 });
 
+// Images
+const addProductImageSchema = z.object({
+    image_url: z.string().url(),
+    sort_order: z.number().int().min(0).max(999).optional().nullable(),
+});
+
+const updateProductImageSchema = z.object({
+    image_url: z.string().url().optional(),
+    sort_order: z.number().int().min(0).max(999).optional().nullable(),
+});
+
+const reorderProductImagesSchema = z.object({
+    images: z
+        .array(
+            z.object({
+                id: z.string().uuid(),
+                sort_order: z.number().int().min(0).max(999),
+            })
+        )
+        .min(1),
+});
+
 module.exports = {
     productIdParamSchema,
     packIdParamSchema,
+    imageIdParamSchema,
     createProductSchema,
     updateProductSchema,
     setActiveSchema,
     createPackSchema,
     updatePackSchema,
     setPackActiveSchema,
+    addProductImageSchema,
+    updateProductImageSchema,
+    reorderProductImagesSchema,
 };
