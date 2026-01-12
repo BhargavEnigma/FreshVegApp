@@ -3,6 +3,26 @@
 const { Op } = require("sequelize");
 const { Product, Category, ProductImage, ProductPack } = require("../models");
 const { AppError } = require("../utils/errors");
+const StorageService = require("./storage.service");
+
+async function hydrateImageUrls(images) {
+    if (!Array.isArray(images) || images.length === 0) return images;
+
+    // Resolve URLs (handles supabase private buckets by generating signed URLs)
+    const out = [];
+    for (const img of images) {
+        const resolved = await StorageService.resolveStoredImageUrl({
+            provider: img.storage_provider,
+            storagePath: img.storage_path,
+            imageUrl: img.image_url,
+            // 24h signed URL window (regenerated on every fetch)
+            expiresInSeconds: 60 * 60 * 24,
+        });
+
+        out.push({ ...img, image_url: resolved || img.image_url });
+    }
+    return out;
+}
 
 async function list({ query }) {
     const page = query.page || 1;
@@ -16,8 +36,6 @@ async function list({ query }) {
     }
 
     if (!query.include_out_of_stock) {
-        // Keeping your current product-level out-of-stock flag
-        // (Later, if you add pack-level stock, we can change this logic)
         where.is_out_of_stock = false;
     }
 
@@ -28,47 +46,44 @@ async function list({ query }) {
     const { rows, count } = await Product.findAndCountAll({
         where,
         include: [
+            { model: Category, as: "category", required: false },
+            { model: ProductImage, as: "images", required: false },
             {
-                model: Category,
-                as: "category",
-                required: false,
-            },
-            {
-                model: ProductImage,
-                as: "images",
-                required: false,
-            },
-            {
-                // ✅ Blueprint v1.2 alignment: return packs with each product
                 model: ProductPack,
                 as: "packs",
                 required: false,
                 where: { is_active: true },
             },
         ],
-        // Important: ordering packs inside include is not supported reliably by Sequelize on all dialects.
-        // So we sort packs after fetch.
         order: [["created_at", "DESC"]],
         limit,
         offset,
-        distinct: true, // ✅ Important for correct count when using hasMany include
+        distinct: true,
     });
 
-    const products = rows.map((p) => {
-        const json = p.toJSON();
-        if (Array.isArray(json.packs)) {
-            json.packs.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-        }
-        if (Array.isArray(json.images)) {
-            json.images.sort((a, b) => {
-                const soA = a.sort_order ?? 0;
-                const soB = b.sort_order ?? 0;
-                if (soA !== soB) return soA - soB;
-                return String(a.created_at || "").localeCompare(String(b.created_at || ""));
-            });
-        }
-        return json;
-    });
+    const products = await Promise.all(
+        rows.map(async (p) => {
+            const json = p.toJSON();
+
+            if (Array.isArray(json.packs)) {
+                json.packs.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+            }
+
+            if (Array.isArray(json.images)) {
+                json.images.sort((a, b) => {
+                    const soA = a.sort_order ?? 0;
+                    const soB = b.sort_order ?? 0;
+                    if (soA !== soB) return soA - soB;
+                    return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+                });
+
+                // ✅ Ensure image_url is always directly renderable (public or signed)
+                json.images = await hydrateImageUrls(json.images);
+            }
+
+            return json;
+        })
+    );
 
     return {
         products,
@@ -82,18 +97,9 @@ async function getById({ productId }) {
     const product = await Product.findOne({
         where: { id: productId, is_active: true },
         include: [
+            { model: Category, as: "category", required: false },
+            { model: ProductImage, as: "images", required: false },
             {
-                model: Category,
-                as: "category",
-                required: false,
-            },
-            {
-                model: ProductImage,
-                as: "images",
-                required: false,
-            },
-            {
-                // ✅ Blueprint v1.2 alignment
                 model: ProductPack,
                 as: "packs",
                 required: false,
@@ -107,9 +113,11 @@ async function getById({ productId }) {
     }
 
     const productJson = product.toJSON();
+
     if (Array.isArray(productJson.packs)) {
         productJson.packs.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
     }
+
     if (Array.isArray(productJson.images)) {
         productJson.images.sort((a, b) => {
             const soA = a.sort_order ?? 0;
@@ -117,6 +125,9 @@ async function getById({ productId }) {
             if (soA !== soB) return soA - soB;
             return String(a.created_at || "").localeCompare(String(b.created_at || ""));
         });
+
+        // ✅ Ensure image_url is always directly renderable (public or signed)
+        productJson.images = await hydrateImageUrls(productJson.images);
     }
 
     return { product: productJson };
