@@ -22,11 +22,20 @@ router.post(
     asyncHandler(AdminProductsController.createWithImages)
 );
 router.put("/:productId", requireAuth, requireRole(["admin"]), asyncHandler(AdminProductsController.update));
+router.put(
+    "/:productId/with-images",
+    requireAuth,
+    requireRole(["admin"]),
+    productImagesUpload.array("images", 10),
+    asyncHandler(AdminProductsController.updateWithImages)
+);
 router.patch("/:productId/active", requireAuth, requireRole(["admin"]), asyncHandler(AdminProductsController.setActive));
+router.delete("/:productId", requireAuth, requireRole(["admin"]), AdminProductsController.deleteProduct);
 
 // Packs
 router.post("/:productId/packs", requireAuth, requireRole(["admin"]), asyncHandler(AdminProductsController.createPack));
 router.put("/packs/:packId", requireAuth, requireRole(["admin"]), asyncHandler(AdminProductsController.updatePack));
+router.get("/:productId/packs", requireAuth, requireRole(["admin"]), asyncHandler(AdminProductsController.listPacks));
 router.patch("/packs/:packId/active", requireAuth, requireRole(["admin"]), asyncHandler(AdminProductsController.setPackActive));
 router.delete("/packs/:packId", requireAuth, requireRole(["admin"]), asyncHandler(AdminProductsController.deletePack));
 

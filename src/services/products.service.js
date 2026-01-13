@@ -5,25 +5,6 @@ const { Product, Category, ProductImage, ProductPack } = require("../models");
 const { AppError } = require("../utils/errors");
 const StorageService = require("./storage.service");
 
-async function hydrateImageUrls(images) {
-    if (!Array.isArray(images) || images.length === 0) return images;
-
-    // Resolve URLs (handles supabase private buckets by generating signed URLs)
-    const out = [];
-    for (const img of images) {
-        const resolved = await StorageService.resolveStoredImageUrl({
-            provider: img.storage_provider,
-            storagePath: img.storage_path,
-            imageUrl: img.image_url,
-            // 24h signed URL window (regenerated on every fetch)
-            expiresInSeconds: 60 * 60 * 24,
-        });
-
-        out.push({ ...img, image_url: resolved || img.image_url });
-    }
-    return out;
-}
-
 async function list({ query }) {
     const page = query.page || 1;
     const limit = query.limit || 20;
@@ -76,9 +57,6 @@ async function list({ query }) {
                     if (soA !== soB) return soA - soB;
                     return String(a.created_at || "").localeCompare(String(b.created_at || ""));
                 });
-
-                // ✅ Ensure image_url is always directly renderable (public or signed)
-                json.images = await hydrateImageUrls(json.images);
             }
 
             return json;
@@ -125,9 +103,6 @@ async function getById({ productId }) {
             if (soA !== soB) return soA - soB;
             return String(a.created_at || "").localeCompare(String(b.created_at || ""));
         });
-
-        // ✅ Ensure image_url is always directly renderable (public or signed)
-        productJson.images = await hydrateImageUrls(productJson.images);
     }
 
     return { product: productJson };

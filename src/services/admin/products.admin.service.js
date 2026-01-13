@@ -3,12 +3,8 @@
 const { sequelize, Product, ProductPack, ProductImage } = require("../../models");
 const { AppError } = require("../../utils/errors");
 const fs = require("fs");
-const {
-    getPublicUrlForRelativePath,
-    isLocalUploadUrl,
-    localPathFromUploadUrl,
-} = require("../../utils/uploads");
 const StorageService = require("../storage.service");
+const crypto = require("crypto");
 
 async function createProduct({ payload }) {
     return sequelize.transaction(async (t) => {
@@ -30,6 +26,44 @@ async function createProduct({ payload }) {
         );
 
         return { product: row };
+    });
+}
+
+async function createWithImages({ payload, files }) {
+    return sequelize.transaction(async (t) => {
+        const product = await Product.create(payload, { transaction: t });
+
+        if (!files?.length) {
+            return { product };
+        }
+
+        // Upload each file to Supabase and build uploaded metadata
+        const uploaded = [];
+        for (const file of files) {
+            const uploadRes = await StorageService.uploadProductImage({
+                localFilePath: file.path,
+                fileName: file.filename,
+                mimeType: file.mimetype,
+                productId: product.id,
+            });
+
+            uploaded.push({
+                storage_provider: "supabase",
+                storage_path: uploadRes.path,
+                image_url: uploadRes.publicUrl,
+                mime_type: file.mimetype,
+                size_bytes: file.size,
+                original_filename: file.originalname,
+            });
+
+            try {
+                fs.unlinkSync(file.path);
+            } catch (_) { }
+        }
+
+        const images = await attachUploadedImagesToProduct({ productId: product.id, uploaded, t });
+
+        return { product, images };
     });
 }
 
@@ -59,6 +93,63 @@ async function updateProduct({ productId, payload }) {
         );
 
         return { product };
+    });
+}
+
+async function updateWithImages({ productId, payload, files }) {
+    return sequelize.transaction(async (t) => {
+        const product = await Product.findByPk(productId, { transaction: t, lock: t.LOCK.UPDATE });
+
+        if (!product) {
+            throw new AppError("PRODUCT_NOT_FOUND", "Product not found", 404);
+        }
+
+        await product.update(
+            {
+                category_id: payload.category_id ?? product.category_id,
+                name: payload.name ?? product.name,
+                description: payload.description ?? product.description,
+                unit: payload.unit ?? null,
+
+                base_quantity: payload.base_quantity,
+                mrp_paise: payload.mrp_paise,
+                selling_price_paise: payload.selling_price_paise,
+
+                is_active: payload.is_active ?? product.is_active,
+                is_out_of_stock: payload.is_out_of_stock ?? product.is_out_of_stock,
+            },
+            { transaction: t }
+        );
+
+        if (!files?.length) {
+            return { product };
+        }
+
+        const uploaded = [];
+        for (const file of files) {
+            const uploadRes = await StorageService.uploadProductImage({
+                localFilePath: file.path,
+                fileName: file.filename,
+                mimeType: file.mimetype,
+                productId: product.id,
+            });
+
+            uploaded.push({
+                storage_provider: "supabase",
+                storage_path: uploadRes.path,
+                image_url: uploadRes.publicUrl,
+                mime_type: file.mimetype,
+                size_bytes: file.size,
+                original_filename: file.originalname,
+            });
+
+            try {
+                fs.unlinkSync(file.path);
+            } catch (_) { }
+        }
+
+        const images = await attachUploadedImagesToProduct({ productId: product.id, uploaded, t });
+        return { product, images };
     });
 }
 
@@ -101,8 +192,8 @@ async function createPack({ productId, payload }) {
                 label: payload.label,
                 base_quantity: payload.base_quantity,
                 base_unit: payload.base_unit,
-                mrp_paise: payload.mrp ? Math.round(Number(payload.mrp_paise) * 100) : null,
-                selling_price_paise: Math.round(Number(payload.selling_price_paise) * 100),
+                mrp_paise: payload.mrp_paise ?? null,
+                selling_price_paise: payload.selling_price_paise,
                 sort_order: payload.sort_order ?? 0,
                 is_active: payload.is_active ?? true,
             },
@@ -126,8 +217,8 @@ async function updatePack({ packId, payload }) {
                 label: payload.label ?? pack.label,
                 base_quantity: payload.base_quantity ?? pack.base_quantity,
                 base_unit: payload.base_unit ?? pack.base_unit,
-                mrp_paise: payload.mrp !== undefined ? (payload.mrp === null ? null : Math.round(Number(payload.mrp) * 100)) : pack.mrp_paise,
-                selling_price_paise: payload.price !== undefined ? Math.round(Number(payload.price) * 100) : pack.selling_price_paise,
+                mrp_paise: payload.mrp_paise !== undefined ? payload.mrp_paise : pack.mrp_paise,
+                selling_price_paise: payload.selling_price_paise !== undefined ? payload.selling_price_paise : pack.selling_price_paise,
                 sort_order: payload.sort_order ?? pack.sort_order,
             },
             { transaction: t }
@@ -165,6 +256,19 @@ async function deletePack({ packId }) {
     });
 }
 
+async function listPacks({ productId, includeInactive }) {
+    const where = { product_id: productId };
+    if (!includeInactive) where.is_active = true;
+
+    const packs = await ProductPack.findAll({
+        where,
+        order: [["sort_order", "ASC"], ["created_at", "ASC"]],
+    });
+
+    return { packs };
+}
+
+
 // Images
 async function addProductImage({ productId, payload }) {
     return sequelize.transaction(async (t) => {
@@ -174,18 +278,16 @@ async function addProductImage({ productId, payload }) {
             throw new AppError("PRODUCT_NOT_FOUND", "Product not found", 404);
         }
 
-        // Auto-assign sort_order if not provided: append after last
         let sortOrder = payload.sort_order;
+
         if (sortOrder === null || sortOrder === undefined) {
-            const maxRow = await ProductImage.findOne({
+            const last = await ProductImage.findOne({
                 where: { product_id: productId },
-                attributes: [[sequelize.fn("MAX", sequelize.col("sort_order")), "max_sort_order"]],
+                order: [["sort_order", "DESC"]],
                 transaction: t,
                 lock: t.LOCK.UPDATE,
-                raw: true,
             });
-            const maxSort = Number(maxRow?.max_sort_order);
-            sortOrder = Number.isFinite(maxSort) ? maxSort + 1 : 0;
+            sortOrder = (last?.sort_order ?? 0) + 1;
         }
 
         const image = await ProductImage.create(
@@ -242,68 +344,39 @@ async function deleteProductImage({ imageId }) {
     });
 }
 
-async function attachUploadedImagesToProduct({ productId, files, t }) {
-    if (!files || !files.length) return [];
+async function attachUploadedImagesToProduct({ productId, uploaded, t }) {
+    if (!uploaded?.length) return [];
 
-    // Start after last sort_order
-    const maxRow = await ProductImage.findOne({
+    const last = await ProductImage.findOne({
         where: { product_id: productId },
-        attributes: [[sequelize.fn("MAX", sequelize.col("sort_order")), "max_sort_order"]],
+        order: [["sort_order", "DESC"]],
         transaction: t,
         lock: t.LOCK.UPDATE,
-        raw: true,
     });
-    const maxSort = Number(maxRow?.max_sort_order);
-    let sort = Number.isFinite(maxSort) ? maxSort + 1 : 0;
 
-    // Upload to configured storage provider (local or supabase)
-    const uploads = await StorageService.uploadProductImages({ productId, files });
+    const startSort = (last?.sort_order ?? 0) + 1;
 
-    const created = [];
-    for (const u of uploads) {
-        const row = await ProductImage.create(
-            {
-                product_id: productId,
-                image_url: u.url,
-                storage_provider: u.provider,
-                storage_path: u.storage_path || null,
-                sort_order: sort,
-            },
-            { transaction: t }
-        );
-        created.push(row);
-        sort += 1;
-    }
+    const rows = uploaded.map((u, idx) => ({
+        id: crypto.randomUUID(),
+        product_id: productId,
+        storage_provider: u.storage_provider || "supabase",
+        storage_path: u.storage_path || null,
+        image_url: u.image_url || null,
+        mime_type: u.mime_type || null,
+        size_bytes: u.size_bytes || null,
+        original_filename: u.original_filename || null,
+        sort_order: startSort + idx,
+        is_primary: startSort + idx === 1,
+        created_at: new Date(),
+        updated_at: new Date(),
+    }));
 
-    return created;
+    await ProductImage.bulkCreate(rows, { transaction: t });
+
+    return rows;
 }
 
-async function createProductWithImages({ payload, files }) {
-    return sequelize.transaction(async (t) => {
-        const row = await Product.create(
-            {
-                category_id: payload.category_id,
-                name: payload.name,
-                description: payload.description ?? null,
-                unit: payload.unit ?? null,
-
-                base_quantity: payload.base_quantity,
-                mrp_paise: payload.mrp_paise,
-                selling_price_paise: payload.selling_price_paise,
-
-                is_active: payload.is_active ?? true,
-                is_out_of_stock: payload.is_out_of_stock ?? false,
-            },
-            { transaction: t }
-        );
-
-        const images = await attachUploadedImagesToProduct({ productId: row.id, files, t });
-
-        return { product: row, images };
-    });
-}
-
-async function uploadProductImages({ productId, files }) {
+async function uploadImagesToProduct({ productId, files }) {
     return sequelize.transaction(async (t) => {
         const product = await Product.findByPk(productId, { transaction: t, lock: t.LOCK.UPDATE });
 
@@ -311,12 +384,37 @@ async function uploadProductImages({ productId, files }) {
             throw new AppError("PRODUCT_NOT_FOUND", "Product not found", 404);
         }
 
-        const images = await attachUploadedImagesToProduct({ productId, files, t });
+        const uploaded = [];
+        for (const file of files) {
+            const uploadRes = await StorageService.uploadProductImage({
+                localFilePath: file.path,
+                fileName: file.filename,
+                mimeType: file.mimetype,
+                productId: product.id,
+            });
+
+            uploaded.push({
+                storage_provider: "supabase",
+                storage_path: uploadRes.path,
+                image_url: uploadRes.publicUrl,
+                mime_type: file.mimetype,
+                size_bytes: file.size,
+                original_filename: file.originalname,
+            });
+
+            try {
+                fs.unlinkSync(file.path);
+            } catch (_) { }
+        }
+
+        const images = await attachUploadedImagesToProduct({ productId, uploaded, t });
         return { images };
     });
 }
 
 async function reorderProductImages({ productId, payload }) {
+
+    console.log('productId : ', productId);
     return sequelize.transaction(async (t) => {
         const product = await Product.findByPk(productId, { transaction: t, lock: t.LOCK.UPDATE });
 
@@ -353,18 +451,50 @@ async function reorderProductImages({ productId, payload }) {
     });
 }
 
+async function deleteProduct({ productId }) {
+    return sequelize.transaction(async (t) => {
+        const product = await Product.findByPk(productId, { transaction: t, lock: t.LOCK.UPDATE });
+
+        if (!product) throw new AppError("PRODUCT_NOT_FOUND", "Product not found", 404);
+
+        // Soft delete (safe for orders/history)
+        await product.update({ is_active: false }, { transaction: t });
+
+        // Optionally delete all image rows (and stored objects best-effort)
+        const images = await ProductImage.findAll({ where: { product_id: productId }, transaction: t, lock: t.LOCK.UPDATE });
+
+        for (const img of images) {
+            await StorageService.deleteStoredObject({
+                provider: img.storage_provider,
+                storagePath: img.storage_path,
+                imageUrl: img.image_url,
+            });
+        }
+
+        await ProductImage.destroy({ where: { product_id: productId }, transaction: t });
+
+        return { deleted: true };
+    });
+}
+
 module.exports = {
     createProduct,
-    createProductWithImages,
+    createWithImages,
     updateProduct,
+    updateWithImages,
     setProductActive,
+
+    deleteProduct,
+
     createPack,
     updatePack,
     setPackActive,
     deletePack,
+    listPacks,
+
     // Images
     addProductImage,
-    uploadProductImages,
+    uploadImagesToProduct,
     updateProductImage,
     deleteProductImage,
     reorderProductImages,
