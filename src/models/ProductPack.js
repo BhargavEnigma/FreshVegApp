@@ -19,11 +19,11 @@ module.exports = (sequelize, DataTypes) => {
                 allowNull: false,
             },
             base_quantity: {
-                type: DataTypes.INTEGER,
+                type: DataTypes.DECIMAL(10, 3),
                 allowNull: false,
                 get() {
                     const value = this.getDataValue('base_quantity');
-                    return parseInt(value, 10);
+                    return value !== null ? parseFloat(value) : null;
                 }
             },
             base_unit: {
