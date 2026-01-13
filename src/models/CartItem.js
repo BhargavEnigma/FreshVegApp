@@ -24,9 +24,13 @@ module.exports = (sequelize, DataTypes) => {
                 allowNull: false,
             },
             quantity: {
-                type: DataTypes.DECIMAL(10, 3),
+                type: DataTypes.INTEGER,
                 allowNull: false,
                 validate: { min: 0.001 },
+                get() {
+                    const value = this.getDataValue('quantity');
+                    return value !== null ? parseInt(value) : null;
+                }
             },
             price_paise: {
                 type: DataTypes.INTEGER,
