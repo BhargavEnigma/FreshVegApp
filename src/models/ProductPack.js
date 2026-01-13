@@ -19,8 +19,12 @@ module.exports = (sequelize, DataTypes) => {
                 allowNull: false,
             },
             base_quantity: {
-                type: DataTypes.DECIMAL(10, 3),
+                type: DataTypes.INTEGER,
                 allowNull: false,
+                get() {
+                    const value = this.getDataValue('base_quantity');
+                    return parseInt(value, 10);
+                }
             },
             base_unit: {
                 type: DataTypes.STRING(10),
@@ -31,11 +35,19 @@ module.exports = (sequelize, DataTypes) => {
                 allowNull: true,
                 defaultValue: null,
                 validate: { min: 0 },
+                get() {
+                    const value = this.getDataValue('mrp_paise');
+                    return value !== null ? parseInt(value, 10) : null;
+                }
             },
             selling_price_paise: {
                 type: DataTypes.INTEGER,
                 allowNull: false,
                 validate: { min: 0 },
+                get() {
+                    const value = this.getDataValue('selling_price_paise');
+                    return parseInt(value, 10);
+                }
             },
             sort_order: {
                 type: DataTypes.INTEGER,
