@@ -5,6 +5,30 @@ const { AppError } = require("../../utils/errors");
 const fs = require("fs");
 const StorageService = require("../storage.service");
 const crypto = require("crypto");
+const { calculatePackPricesFromProduct } = require("../pricing.service");
+
+async function syncDynamicPacksForProduct({ product, t }) {
+    const packs = await ProductPack.findAll({
+        where: { product_id: product.id, pricing_mode: "dynamic" },
+        transaction: t,
+        lock: t.LOCK.UPDATE,
+    });
+
+    for (const pack of packs) {
+        const computed = calculatePackPricesFromProduct({
+            product,
+            pack: { base_unit: pack.base_unit, base_quantity: pack.base_quantity },
+        });
+
+        await pack.update(
+            {
+                mrp_paise: computed.mrp_paise ?? null,
+                selling_price_paise: computed.selling_price_paise,
+            },
+            { transaction: t }
+        );
+    }
+}
 
 async function createProduct({ payload }) {
     return sequelize.transaction(async (t) => {
@@ -80,7 +104,7 @@ async function updateProduct({ productId, payload }) {
                 category_id: payload.category_id ?? product.category_id,
                 name: payload.name ?? product.name,
                 description: payload.description ?? product.description,
-                unit: payload.unit ?? null,
+                unit: payload.unit ?? product.unit,
 
                 base_quantity: payload.base_quantity, // ✅ must be passed
                 mrp_paise: payload.mrp_paise, // ✅ must be passed
@@ -91,6 +115,8 @@ async function updateProduct({ productId, payload }) {
             },
             { transaction: t }
         );
+
+        await syncDynamicPacksForProduct({ product, t });
 
         return { product };
     });
@@ -120,6 +146,8 @@ async function updateWithImages({ productId, payload, files }) {
             },
             { transaction: t }
         );
+
+        await syncDynamicPacksForProduct({ product, t });
 
         if (!files?.length) {
             return { product };
@@ -186,14 +214,64 @@ async function createPack({ productId, payload }) {
             throw new AppError("PACK_ALREADY_EXISTS", "Pack with same label already exists", 400);
         }
 
+        // Decide whether to use manual prices or computed prices
+        const hasMrp = payload.mrp_paise !== undefined && payload.mrp_paise !== null && payload.mrp_paise !== "";
+        const hasSelling =
+            payload.selling_price_paise !== undefined &&
+            payload.selling_price_paise !== null &&
+            payload.selling_price_paise !== "";
+
+        let mrpToSave;
+        let sellingToSave;
+
+        const pricingMode = (hasMrp || hasSelling) ? "manual" : "dynamic";
+
+        if (hasMrp || hasSelling) {
+            // Use provided values (if one missing, we can compute that one OR keep null)
+            // Here: if selling missing but mrp provided => compute selling dynamically (and vice versa)
+            const computed = calculatePackPricesFromProduct({
+                product,
+                pack: { base_unit: payload.base_unit, base_quantity: payload.base_quantity },
+            });
+
+            if (hasMrp) {
+                const n = Number(payload.mrp_paise);
+                if (!Number.isFinite(n) || n < 0) {
+                    throw new AppError("INVALID_PRICE", "Pack mrp_paise is invalid", 400);
+                }
+                mrpToSave = Math.round(n);
+            } else {
+                mrpToSave = computed.mrp_paise ?? null;
+            }
+
+            if (hasSelling) {
+                const n = Number(payload.selling_price_paise);
+                if (!Number.isFinite(n) || n < 0) {
+                    throw new AppError("INVALID_PRICE", "Pack selling_price_paise is invalid", 400);
+                }
+                sellingToSave = Math.round(n);
+            } else {
+                sellingToSave = computed.selling_price_paise;
+            }
+        } else {
+            // Fully dynamic
+            const computed = calculatePackPricesFromProduct({
+                product,
+                pack: { base_unit: payload.base_unit, base_quantity: payload.base_quantity },
+            });
+            mrpToSave = computed.mrp_paise ?? null;
+            sellingToSave = computed.selling_price_paise;
+        }
+
         const pack = await ProductPack.create(
             {
                 product_id: productId,
                 label: payload.label,
                 base_quantity: payload.base_quantity,
                 base_unit: payload.base_unit,
-                mrp_paise: payload.mrp_paise ?? null,
-                selling_price_paise: payload.selling_price_paise,
+                mrp_paise: mrpToSave,
+                selling_price_paise: sellingToSave,
+                pricing_mode: pricingMode,
                 sort_order: payload.sort_order ?? 0,
                 is_active: payload.is_active ?? true,
             },
@@ -206,25 +284,56 @@ async function createPack({ productId, payload }) {
 
 async function updatePack({ packId, payload }) {
     return sequelize.transaction(async (t) => {
-        const pack = await ProductPack.findByPk(packId, { transaction: t, lock: t.LOCK.UPDATE });
 
+        const pack = await ProductPack.findByPk(packId, { transaction: t, lock: t.LOCK.UPDATE, raw: true });
         if (!pack) {
             throw new AppError("PACK_NOT_FOUND", "Pack not found", 404);
         }
+        const product = await Product.findByPk(pack.product_id, { transaction: t, lock: t.LOCK.UPDATE, raw: true });
+        if (!product) {
+            throw new AppError("PRODUCT_NOT_FOUND", "Product not found for this pack", 404);
+        }
+        console.log('pack : ------ ', pack);
+        console.log('product : ------ ', product);
 
-        await pack.update(
+        const nextBaseUnit = payload.base_unit ?? pack.base_unit;
+        const nextBaseQty = payload.base_quantity ?? pack.base_quantity;
+
+        const computed = calculatePackPricesFromProduct({
+            product,
+            pack: { base_unit: nextBaseUnit, base_quantity: nextBaseQty },
+        });
+
+        const hasMrp = 
+            payload.mrp_paise !== undefined && 
+            payload.mrp_paise !== null && 
+            payload.mrp_paise !== "";
+        const hasSelling =
+            payload.selling_price_paise !== undefined &&
+            payload.selling_price_paise !== null &&
+            payload.selling_price_paise !== "";
+
+        console.log('hasSelling : ', hasSelling);
+        console.log('hasMrp : ', hasMrp);
+
+        const pricingMode = (hasMrp || hasSelling) ? "manual" : "dynamic";
+
+        await ProductPack.update(
             {
                 label: payload.label ?? pack.label,
                 base_quantity: payload.base_quantity ?? pack.base_quantity,
                 base_unit: payload.base_unit ?? pack.base_unit,
-                mrp_paise: payload.mrp_paise !== undefined ? payload.mrp_paise : pack.mrp_paise,
-                selling_price_paise: payload.selling_price_paise !== undefined ? payload.selling_price_paise : pack.selling_price_paise,
+                mrp_paise: computed.mrp_paise,
+                selling_price_paise: computed.selling_price_paise,
+                pricing_mode: pricingMode,
                 sort_order: payload.sort_order ?? pack.sort_order,
             },
-            { transaction: t }
+            { where: { id: packId }, transaction: t }
         );
 
-        return { pack };
+        const updatedPack = await ProductPack.findByPk(packId, { transaction: t });
+
+        return { pack: updatedPack };
     });
 }
 

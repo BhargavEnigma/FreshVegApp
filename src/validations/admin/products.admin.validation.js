@@ -48,7 +48,7 @@ const createPackSchema = z.object({
     base_quantity: z.number().positive(),           // 250
     base_unit: z.string().min(1).max(10),           // "g" | "kg" | "pc"
     mrp_paise: z.number().positive().optional().nullable(),
-    selling_price_paise: z.number().positive(),                   // selling price
+    selling_price_paise: z.number().positive().optional().nullable(),
     sort_order: z.number().int().min(0).max(999).optional().nullable(),
     is_active: z.boolean().optional().nullable(),
 });
@@ -58,7 +58,7 @@ const updatePackSchema = z.object({
     base_quantity: z.number().positive().optional(),
     base_unit: z.string().min(1).max(10).optional(),
     mrp_paise: z.number().positive().optional().nullable(),
-    selling_price_paise: z.number().positive().optional(),
+    selling_price_paise: z.number().positive().optional().nullable(),
     sort_order: z.number().int().min(0).max(999).optional().nullable(),
     is_active: z.boolean().optional().nullable(),
 });

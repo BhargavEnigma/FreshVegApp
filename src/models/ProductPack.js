@@ -49,6 +49,11 @@ module.exports = (sequelize, DataTypes) => {
                     return parseInt(value, 10);
                 }
             },
+            pricing_mode: {
+                type: DataTypes.STRING(20),
+                allowNull: false,
+                defaultValue: "dynamic",
+            },
             sort_order: {
                 type: DataTypes.INTEGER,
                 allowNull: false,
