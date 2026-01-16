@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const { sequelize, Payment, Order, OrderStatusEvent } = require("../models");
 const { AppError } = require("../utils/errors");
 
-// IST helpers (kept local to avoid cross-service imports)
+// IST helpers
 function getIstYyyyMmDd() {
     const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone: "Asia/Kolkata",
@@ -41,18 +41,13 @@ function verifyWebhookSignature({ rawBody, signature, secret }) {
     if (!secret) return true; // allow disabling in dev
     if (!signature) return false;
 
-    const computed = crypto
-        .createHmac("sha256", secret)
-        .update(String(rawBody || ""), "utf8")
-        .digest("hex");
-
+    const computed = crypto.createHmac("sha256", secret).update(String(rawBody || ""), "utf8").digest("hex");
     return timingSafeEqualHex(computed, signature);
 }
 
 async function handleWebhook({ headers, payload, rawBody }) {
     const webhookSecret = process.env.PAYMENT_WEBHOOK_SECRET || null;
 
-    // Common headers (Razorpay uses x-razorpay-signature)
     const signature =
         headers["x-razorpay-signature"] ||
         headers["x-webhook-signature"] ||
@@ -66,11 +61,24 @@ async function handleWebhook({ headers, payload, rawBody }) {
 
     const provider = payload.provider || "gateway";
     const provider_payment_id = payload.provider_payment_id || payload.payment_id || null;
+
+    // ✅ IMPORTANT: order_id must exist to update your DB (payments.order_id is NOT NULL)
     const order_id = payload.order_id || null;
+
     const status = String(payload.status || "").toLowerCase();
 
-    if (!order_id && !provider_payment_id) {
-        return { received: true, ignored: true };
+    // If we can't map webhook to an order, don't crash the webhook endpoint
+    if (!order_id) {
+        // If provider_payment_id exists, we can only process if we already have a payment row with that id.
+        if (!provider_payment_id) {
+            return { received: true, ignored: true, reason: "missing_order_id_and_provider_payment_id" };
+        }
+
+        const existing = await Payment.findOne({ where: { provider_payment_id } });
+        if (!existing) {
+            return { received: true, ignored: true, reason: "missing_order_id_no_existing_payment" };
+        }
+        // If it exists, we can proceed using existing.order_id
     }
 
     return sequelize.transaction(async (t) => {
@@ -84,6 +92,7 @@ async function handleWebhook({ headers, payload, rawBody }) {
             });
         }
 
+        // If we have order_id, try latest payment for order
         if (!payment && order_id) {
             payment = await Payment.findOne({
                 where: { order_id },
@@ -93,7 +102,12 @@ async function handleWebhook({ headers, payload, rawBody }) {
             });
         }
 
+        // If still not found, create ONLY if we have order_id
         if (!payment) {
+            if (!order_id) {
+                return { received: true, ignored: true, reason: "cannot_create_payment_without_order_id" };
+            }
+
             payment = await Payment.create(
                 {
                     order_id,
@@ -123,8 +137,10 @@ async function handleWebhook({ headers, payload, rawBody }) {
             { transaction: t }
         );
 
-        if (payment.order_id) {
-            const order = await Order.findByPk(payment.order_id, {
+        // Update order (if any)
+        const effectiveOrderId = payment.order_id;
+        if (effectiveOrderId) {
+            const order = await Order.findByPk(effectiveOrderId, {
                 transaction: t,
                 lock: t.LOCK.UPDATE,
             });
@@ -136,11 +152,9 @@ async function handleWebhook({ headers, payload, rawBody }) {
                 if (status === "refunded") newPaymentStatus = "refunded";
 
                 const oldOrderStatus = order.status;
-
                 let newOrderStatus = oldOrderStatus;
 
-                // If a UPI payment succeeds AFTER midnight IST of the delivery_date,
-                // we reschedule the delivery to the next day to avoid disrupting warehouse ops.
+                // Late-paid reschedule rule
                 const nowIst = getIstYyyyMmDd();
                 const shouldRescheduleOnPaid =
                     status === "paid" &&
@@ -162,14 +176,13 @@ async function handleWebhook({ headers, payload, rawBody }) {
 
                 if (shouldRescheduleOnPaid) {
                     orderUpdate.delivery_date = deliveryDateNew;
-
-                    // Ensure it is eligible to be locked on the new delivery day
                     orderUpdate.is_locked = false;
                     orderUpdate.locked_at = null;
                 }
 
                 await order.update(orderUpdate, { transaction: t });
 
+                // ✅ Create ONE status event
                 await OrderStatusEvent.create(
                     {
                         order_id: order.id,
@@ -185,18 +198,6 @@ async function handleWebhook({ headers, payload, rawBody }) {
                             delivery_date_new: deliveryDateNew,
                             rescheduled_due_to_late_payment: Boolean(shouldRescheduleOnPaid),
                         },
-                    },
-                    { transaction: t }
-                );
-
-                await OrderStatusEvent.create(
-                    {
-                        order_id: order.id,
-                        from_status: oldOrderStatus,
-                        to_status: newOrderStatus,
-                        actor_user_id: null,
-                        note: "payment_webhook",
-                        meta: { payment_status: newPaymentStatus, provider, provider_payment_id },
                     },
                     { transaction: t }
                 );

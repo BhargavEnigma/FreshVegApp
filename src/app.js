@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const path = require("path");
+
 const healthRoutes = require("./routes/health.routes");
 const authRoutes = require("./routes/auth.routes");
 const usersRoutes = require("./routes/user.routes");
@@ -24,7 +25,7 @@ const adminWarehouse = require("./routes/admin/warehouses.routes");
 const opsReportsRoutes = require("./routes/ops/reports.ops.routes");
 const opsJobsRoutes = require("./routes/ops/jobs.ops.routes");
 
-// ✅ NEW: admin users management routes
+// Admin users + dashboard
 const adminUsersRoutes = require("./routes/admin/users.admin.routes");
 const adminDashboardRoutes = require("./routes/admin/dashboard.admin.routes");
 
@@ -47,9 +48,7 @@ try {
     // Do not crash app if uploads dir can't be created (still allow non-upload flows)
 }
 
-app.use("/v1/health", healthRoutes);
-
-// src/app.js (add before app.use(express.json()))
+// ✅ Raw body for webhook only
 app.use((req, res, next) => {
     if (req.originalUrl === "/v1/payments/webhook") {
         let data = "";
@@ -88,9 +87,7 @@ app.use("/v1/address", addressesRoutes);
 app.use("/v1/products", productsRoutes);
 app.use("/v1/cart", cartRoutes);
 app.use("/v1/checkout", checkoutRoutes);
-
 app.use("/v1/deliveryslot", deliverySlotRoutes);
-
 app.use("/v1/setting", settingsRoutes);
 app.use("/v1/payments", paymentsRoutes);
 app.use("/v1/catalog", catalogRoutes);
@@ -101,18 +98,24 @@ app.use("/v1/admin/product", adminProductRoutes);
 app.use("/v1/admin/deliveryslot", adminDeliverySlots);
 app.use("/v1/adminSetting", adminSetting);
 app.use("/v1/adminWarehouse", adminWarehouse);
-
-// ✅ NEW: Admin user/role management
 app.use("/v1/admin/users", adminUsersRoutes);
-
-// ✅ NEW: Admin dashboard KPIs
 app.use("/v1/admin/dashboard", adminDashboardRoutes);
 
-// Ops / Warehouse
+// ✅ Aliases (more consistent paths, keep old ones for backward compatibility)
+app.use("/v1/admin/setting", adminSetting);
+app.use("/v1/admin/warehouse", adminWarehouse);
+
+// Ops/Warehouse (existing paths)
 app.use("/v1/opsOrder", orderOpsRoutes);
 app.use("/v1/opsReports", opsReportsRoutes);
 app.use("/v1/opsJobs", opsJobsRoutes);
 app.use("/v1/opsCategories", opsCategoryRoutes);
+
+// ✅ Aliases (more consistent paths)
+app.use("/v1/ops/orders", orderOpsRoutes);
+app.use("/v1/ops/reports", opsReportsRoutes);
+app.use("/v1/ops/jobs", opsJobsRoutes);
+app.use("/v1/ops/categories", opsCategoryRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

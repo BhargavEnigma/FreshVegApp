@@ -110,8 +110,8 @@ async function updateProduct({ productId, payload }) {
                 mrp_paise: payload.mrp_paise, // ✅ must be passed
                 selling_price_paise: payload.selling_price_paise, // ✅ must be passed
 
-                is_active: payload.is_active ?? true,
-                is_out_of_stock: payload.is_out_of_stock ?? false,
+                is_active: payload.is_active ?? product.is_active,
+                is_out_of_stock: payload.is_out_of_stock ?? product.is_out_of_stock,
             },
             { transaction: t }
         );
@@ -284,17 +284,15 @@ async function createPack({ productId, payload }) {
 
 async function updatePack({ packId, payload }) {
     return sequelize.transaction(async (t) => {
-
-        const pack = await ProductPack.findByPk(packId, { transaction: t, lock: t.LOCK.UPDATE, raw: true });
+        const pack = await ProductPack.findByPk(packId, { transaction: t, lock: t.LOCK.UPDATE });
         if (!pack) {
             throw new AppError("PACK_NOT_FOUND", "Pack not found", 404);
         }
-        const product = await Product.findByPk(pack.product_id, { transaction: t, lock: t.LOCK.UPDATE, raw: true });
+
+        const product = await Product.findByPk(pack.product_id, { transaction: t, lock: t.LOCK.UPDATE });
         if (!product) {
             throw new AppError("PRODUCT_NOT_FOUND", "Product not found for this pack", 404);
         }
-        console.log('pack : ------ ', pack);
-        console.log('product : ------ ', product);
 
         const nextBaseUnit = payload.base_unit ?? pack.base_unit;
         const nextBaseQty = payload.base_quantity ?? pack.base_quantity;
@@ -304,36 +302,41 @@ async function updatePack({ packId, payload }) {
             pack: { base_unit: nextBaseUnit, base_quantity: nextBaseQty },
         });
 
-        const hasMrp = 
-            payload.mrp_paise !== undefined && 
-            payload.mrp_paise !== null && 
-            payload.mrp_paise !== "";
+        const hasMrp = payload.mrp_paise !== undefined && payload.mrp_paise !== null && payload.mrp_paise !== "";
         const hasSelling =
             payload.selling_price_paise !== undefined &&
             payload.selling_price_paise !== null &&
             payload.selling_price_paise !== "";
 
-        console.log('hasSelling : ', hasSelling);
-        console.log('hasMrp : ', hasMrp);
+        const nextPricingMode = (hasMrp || hasSelling) ? "manual" : "dynamic";
 
-        const pricingMode = (hasMrp || hasSelling) ? "manual" : "dynamic";
+        let mrpToSave = null;
+        let sellingToSave = null;
 
-        await ProductPack.update(
+        if (nextPricingMode === "manual") {
+            // if one is missing, compute it (same behavior as createPack)
+            mrpToSave = hasMrp ? Math.round(Number(payload.mrp_paise)) : (computed.mrp_paise ?? null);
+            sellingToSave = hasSelling ? Math.round(Number(payload.selling_price_paise)) : computed.selling_price_paise;
+        } else {
+            mrpToSave = computed.mrp_paise ?? null;
+            sellingToSave = computed.selling_price_paise;
+        }
+
+        await pack.update(
             {
                 label: payload.label ?? pack.label,
-                base_quantity: payload.base_quantity ?? pack.base_quantity,
-                base_unit: payload.base_unit ?? pack.base_unit,
-                mrp_paise: computed.mrp_paise,
-                selling_price_paise: computed.selling_price_paise,
-                pricing_mode: pricingMode,
+                base_quantity: nextBaseQty,
+                base_unit: nextBaseUnit,
+                mrp_paise: mrpToSave,
+                selling_price_paise: sellingToSave,
+                pricing_mode: nextPricingMode,
                 sort_order: payload.sort_order ?? pack.sort_order,
+                is_active: payload.is_active ?? pack.is_active,
             },
-            { where: { id: packId }, transaction: t }
+            { transaction: t }
         );
 
-        const updatedPack = await ProductPack.findByPk(packId, { transaction: t });
-
-        return { pack: updatedPack };
+        return { pack };
     });
 }
 

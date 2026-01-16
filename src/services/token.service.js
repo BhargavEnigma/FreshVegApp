@@ -8,9 +8,14 @@ function createAccessToken({ userId, phone }) {
     });
 }
 
-function createRefreshToken({ userId }) {
-    return jwt.sign({ userId }, env.jwt.refreshSecret, {
-        expiresIn: `${env.jwt.refreshExpiresInDays}d`
+function createRefreshToken({ userId, phone }) {
+    const payload = { userId };
+    if (phone) {
+        payload.phone = phone;
+    }
+
+    return jwt.sign(payload, env.jwt.refreshSecret, {
+        expiresIn: `${env.jwt.refreshExpiresInDays}d`,
     });
 }
 

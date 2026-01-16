@@ -236,6 +236,12 @@ async function refreshAccessToken({ refresh_token, device_id }) {
         // throw new AppError("INVALID_REFRESH_TOKEN", "Device mismatch", 401);
     }
 
+    let phone = decoded.phone;
+    if (!phone) {
+        const user = await User.findByPk(decoded.userId, { attributes: ["phone"] });
+        phone = user?.phone || null;
+    }
+
     const accessToken = createAccessToken({
         userId: decoded.userId,
         phone: decoded.phone,

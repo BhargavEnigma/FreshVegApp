@@ -8,7 +8,7 @@ const OrdersController = require("../controllers/orders.controller");
 const router = express.Router();
 
 router.get("/", requireAuth, asyncHandler(OrdersController.listMyOrders));
-router.get("/:id", requireAuth, asyncHandler(OrdersController.getMyOrderById));
+router.get("/:orderId", requireAuth, asyncHandler(OrdersController.getMyOrderById));
 router.post("/:id/cancel", requireAuth, asyncHandler(OrdersController.cancelMyOrder));
 
 module.exports = router;

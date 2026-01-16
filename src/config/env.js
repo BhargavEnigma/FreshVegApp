@@ -73,7 +73,7 @@ const env = {
         url: (process.env.SUPABASE_URL || '').trim(),
         serviceRoleKey: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim(),
         bucket: (process.env.SUPABASE_STORAGE_BUCKET || 'product-images').trim(),
-        bucketIsPublic: true,
+        bucketIsPublic: parseBool(process.env.SUPABASE_BUCKET_PUBLIC, true),
     },
 
 };

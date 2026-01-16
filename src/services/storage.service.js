@@ -4,6 +4,22 @@ const { env } = require("../config/env");
 
 const supabase = getSupabaseAdminClient();
 
+async function getPublicOrSignedUrl({ storagePath }) {
+    const bucket = env.supabase.bucket;
+
+    if (!storagePath) return null;
+
+    if (env.supabase.bucketIsPublic) {
+        const { data } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+        return data?.publicUrl || null;
+    }
+
+    // Private bucket => signed URL
+    const { data, error } = await supabase.storage.from(bucket).createSignedUrl(storagePath, 60 * 60); // 1 hour
+    if (error) return null;
+    return data?.signedUrl || null;
+}
+
 async function uploadProductImage({ localFilePath, fileName, mimeType, productId }) {
     const bucket = env.supabase.bucket;
     const storagePath = `products/${productId}/${fileName}`;
@@ -19,13 +35,11 @@ async function uploadProductImage({ localFilePath, fileName, mimeType, productId
 
     if (error) throw error;
 
-    const { data } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(storagePath);
+    const url = await getPublicOrSignedUrl({ storagePath });
 
     return {
         path: storagePath,
-        publicUrl: data.publicUrl,
+        publicUrl: url,
     };
 }
 
@@ -50,5 +64,6 @@ async function deleteStoredObject({ provider, storagePath }) {
 
 module.exports = {
     uploadProductImage,
-    deleteStoredObject
+    deleteStoredObject,
+    getPublicOrSignedUrl,
 };

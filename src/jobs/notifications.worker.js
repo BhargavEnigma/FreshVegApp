@@ -8,7 +8,6 @@ const { sendPushToToken } = require("../services/push.service");
 function buildPushFromTemplate(notificationRow) {
     const { template, payload } = notificationRow;
 
-    // Keep it simple and consistent for MVP
     if (template === "order_placed") {
         return {
             title: "Order placed ✅",
@@ -42,7 +41,6 @@ function buildPushFromTemplate(notificationRow) {
         };
     }
 
-    // fallback
     return {
         title: "FreshVeg",
         body: "You have a new update.",
@@ -50,8 +48,11 @@ function buildPushFromTemplate(notificationRow) {
     };
 }
 
-async function processQueuedPushNotifications({ batchSize = 50 } = {}) {
-    // Use a transaction so that we can safely "claim" rows
+/**
+ * Claim queued notifications fast in a DB transaction, then process outside transaction.
+ * Uses status = "processing" to avoid double-sends.
+ */
+async function claimQueued({ batchSize = 50 } = {}) {
     return sequelize.transaction(async (t) => {
         const rows = await Notification.findAll({
             where: {
@@ -65,80 +66,78 @@ async function processQueuedPushNotifications({ batchSize = 50 } = {}) {
             lock: t.LOCK.UPDATE,
         });
 
-        if (!rows.length) return { processed: 0 };
+        if (!rows.length) return [];
 
-        for (const n of rows) {
-            try {
-                const user = n.user_id
-                    ? await User.findByPk(n.user_id, { transaction: t, lock: t.LOCK.UPDATE })
-                    : null;
+        const ids = rows.map((r) => r.id);
 
-                const token = user?.fcm_token || null;
-                if (!token) {
-                    await n.update(
-                        {
-                            status: "failed",
-                            last_error: "USER_HAS_NO_FCM_TOKEN",
-                            attempt_count: n.attempt_count + 1,
-                        },
-                        { transaction: t }
-                    );
-                    continue;
-                }
+        await Notification.update(
+            { status: "processing" },
+            { where: { id: ids }, transaction: t }
+        );
 
-                const push = buildPushFromTemplate(n);
-                const result = await sendPushToToken({
-                    token,
-                    title: push.title,
-                    body: push.body,
-                    data: push.data,
-                });
-
-                if (result.ok) {
-                    await n.update(
-                        { status: "sent", sent_at: new Date(), last_error: null },
-                        { transaction: t }
-                    );
-                } else {
-                    await n.update(
-                        {
-                            status: "failed",
-                            attempt_count: n.attempt_count + 1,
-                            last_error: String(result.error || "SEND_FAILED"),
-                        },
-                        { transaction: t }
-                    );
-                }
-            } catch (e) {
-                const msg = String(e?.message || e);
-
-                // If token is invalid/unregistered → clear it
-                if (msg.includes("registration-token-not-registered") || msg.includes("invalid-registration-token")) {
-                    try {
-                        const user = await User.findByPk(n.user_id, { transaction: t, lock: t.LOCK.UPDATE });
-                        if (user) await user.update({ fcm_token: null }, { transaction: t });
-                    } catch (_) { }
-                }
-
-                await n.update(
-                    {
-                        status: "failed",
-                        attempt_count: n.attempt_count + 1,
-                        last_error: msg.slice(0, 450),
-                    },
-                    { transaction: t }
-                );
-            }
-        }
-
-        return { processed: rows.length };
+        return rows;
     });
+}
+
+async function processQueuedPushNotifications({ batchSize = 50 } = {}) {
+    const rows = await claimQueued({ batchSize });
+    if (!rows.length) return { processed: 0 };
+
+    for (const n of rows) {
+        try {
+            const user = n.user_id ? await User.findByPk(n.user_id) : null;
+            const token = user?.fcm_token || null;
+
+            if (!token) {
+                await n.update({
+                    status: "failed",
+                    last_error: "USER_HAS_NO_FCM_TOKEN",
+                    attempt_count: n.attempt_count + 1,
+                });
+                continue;
+            }
+
+            const push = buildPushFromTemplate(n);
+            const result = await sendPushToToken({
+                token,
+                title: push.title,
+                body: push.body,
+                data: push.data,
+            });
+
+            if (result.ok) {
+                await n.update({ status: "sent", sent_at: new Date(), last_error: null });
+            } else {
+                await n.update({
+                    status: "failed",
+                    attempt_count: n.attempt_count + 1,
+                    last_error: String(result.error || "SEND_FAILED"),
+                });
+            }
+        } catch (e) {
+            const msg = String(e?.message || e);
+
+            if (msg.includes("registration-token-not-registered") || msg.includes("invalid-registration-token")) {
+                try {
+                    const user = await User.findByPk(n.user_id);
+                    if (user) await user.update({ fcm_token: null });
+                } catch (_) {}
+            }
+
+            await n.update({
+                status: "failed",
+                attempt_count: n.attempt_count + 1,
+                last_error: msg.slice(0, 450),
+            });
+        }
+    }
+
+    return { processed: rows.length };
 }
 
 function startNotificationsWorker() {
     if (process.env.ENABLE_NOTIFICATIONS_WORKER !== "true") return;
 
-    // every minute
     cron.schedule("* * * * *", async () => {
         try {
             const r = await processQueuedPushNotifications({ batchSize: 50 });
