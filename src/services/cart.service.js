@@ -48,7 +48,11 @@ async function buildCartResponse({ cartId, t }) {
                         required: false,
                         include: [{ model: ProductImage, as: "images", required: false }],
                     },
-                    { model: ProductPack, as: "pack", required: true },
+                    { 
+                        model: ProductPack, 
+                        as: "pack", 
+                        required: true
+                    }
                 ],
             },
         ],
@@ -89,7 +93,7 @@ async function buildCartResponse({ cartId, t }) {
             items,
             summary: {
                 items_count: items.length,
-                total_qty: String(total_qty),
+                total_qty: total_qty,
                 subtotal_paise,
             },
         },

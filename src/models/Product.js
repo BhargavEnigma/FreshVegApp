@@ -29,6 +29,10 @@ module.exports = (sequelize, DataTypes) => {
             base_quantity: {
                 type: DataTypes.DECIMAL(10, 3),
                 allowNull: false,
+                get() {
+                    const value = this.getDataValue('base_quantity');
+                    return value !== null ? parseFloat(value) : null;
+                }
             },
             mrp_paise: {
                 type: DataTypes.INTEGER,

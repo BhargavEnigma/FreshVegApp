@@ -197,7 +197,7 @@ async function updatePack(req, res) {
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.log('CREATE PRODUCT PACK ERROR : ', e);
+        console.log('UPDATE PRODUCT PACK ERROR : ', e);
 
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
