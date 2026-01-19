@@ -16,6 +16,7 @@ const {
 } = require("../models");
 
 const { AppError } = require("../utils/errors");
+const { computeOrderTotals } = require("./orderTotals.service");
 
 function generateOrderNumber() {
     const now = Date.now().toString().slice(-8);
@@ -275,10 +276,14 @@ async function checkout({ userId, payload }) {
         });
 
         const packMap = new Map(packs.map((p) => [p.id, p]));
-        console.log('packMap : ', packMap);
         let subtotal_paise = 0;
 
         const normalizedItems = payload.items.map((it) => {
+
+            if (!it?.product_id || !it?.product_pack_id) {
+                throw new AppError("INVALID_ITEM", "Each item must include product_id and product_pack_id", 400); // ✅ EDITED
+            }
+
             const pack = packMap.get(it.product_pack_id);
 
             if (!pack || !pack.is_active) {
@@ -299,7 +304,15 @@ async function checkout({ userId, payload }) {
             }
 
             const qty = Number(it.quantity);
+            if (!Number.isFinite(qty) || !Number.isInteger(qty) || qty <= 0) {
+                throw new AppError("INVALID_QUANTITY", "Item quantity must be a positive integer", 400);
+            }
+
             const unitPrice = Number(pack.selling_price_paise);
+            if (!Number.isFinite(unitPrice) || unitPrice < 0) {
+                throw new AppError("INVALID_PRICE", "Invalid pack price", 500);
+            }
+
             const lineTotal = Math.round(qty * unitPrice);
 
             subtotal_paise += lineTotal;
@@ -313,9 +326,16 @@ async function checkout({ userId, payload }) {
             };
         });
 
-        const delivery_fee_paise = 0;
         const discount_paise = 0;
-        const total_paise = subtotal_paise + delivery_fee_paise - discount_paise;
+
+        const totals = await computeOrderTotals({ subtotal_paise, t });
+        const delivery_fee_paise = totals.delivery_fee_paise;
+        const gst_rate_bps = totals.gst_rate_bps;
+        const gst_amount_paise = totals.gst_amount_paise;
+        const grand_total_paise = totals.grand_total_paise;
+
+        // Backward compatibility: keep using total_paise everywhere (mobile already expects it)
+        const total_paise = grand_total_paise - discount_paise;
 
         const isCod = payload.payment_method === "cod";
         const initialStatus = isCod ? "placed" : "payment_pending";
@@ -335,6 +355,11 @@ async function checkout({ userId, payload }) {
                 subtotal_paise,
                 delivery_fee_paise,
                 discount_paise,
+
+                gst_rate_bps,
+                gst_amount_paise,
+                grand_total_paise,
+
                 total_paise,
                 is_locked: false,
             },
@@ -348,7 +373,7 @@ async function checkout({ userId, payload }) {
                 product_pack_id: x.pack.id,
                 pack_label: x.pack.label ?? null,
                 product_name: x.product.name,
-                unit: x.product.unit ?? x.pack.base_unit ?? "unit",
+                unit: x.pack.base_unit ?? x.product.unit ?? "unit",
                 quantity: x.qty,
                 unit_price_paise: x.unitPrice,
                 line_total_paise: x.lineTotal,
@@ -373,7 +398,7 @@ async function checkout({ userId, payload }) {
                 order_id: order.id,
                 amount_paise: total_paise,
                 method: payload.payment_method,
-                status: isCod ? "paid" : "pending",
+                status: isCod ? "pending" : "paid",
             },
             { transaction: t }
         );
@@ -401,6 +426,11 @@ async function checkout({ userId, payload }) {
                 status: order.status,
                 payment_status: order.payment_status,
                 total_paise,
+                subtotal_paise,
+                delivery_fee_paise,
+                gst_rate_bps,
+                gst_amount_paise,
+                grand_total_paise,
                 warehouse_id: order.warehouse_id,
                 delivery_date: order.delivery_date,
             },

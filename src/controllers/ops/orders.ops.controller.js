@@ -8,6 +8,7 @@ const {
     orderIdParamSchema,
     opsListOrdersQuerySchema,
     updateOrderStatusSchema,
+    opsDeliveryTodayListOrdersQuerySchema,
 } = require("../../validations/ops/orders.ops.validation");
 
 async function list(req, res) {
@@ -15,6 +16,28 @@ async function list(req, res) {
         const query = opsListOrdersQuerySchema.parse(req.query);
 
         const data = await OpsOrdersService.list({
+            actorUserId: req.user.userId,
+            query,
+        });
+
+        return Response.ok(res, 200, data);
+    } catch (e) {
+        console.error("OPS LIST ORDERS ERROR:", e);
+        if (e instanceof AppError) {
+            return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
+        }
+        if (e?.name === "ZodError") {
+            return Response.fail(res, 400, "VALIDATION_ERROR", "Invalid request", e.issues ?? null);
+        }
+        return Response.fail(res, 500, "PROVIDER_ERROR", "Something went wrong");
+    }
+}
+
+async function deliveryTodayOrderList(req, res) {
+    try {
+        const query = opsDeliveryTodayListOrdersQuerySchema.parse(req.query);
+
+        const data = await OpsOrdersService.deliveryTodayOrderList({
             actorUserId: req.user.userId,
             query,
         });
@@ -59,5 +82,6 @@ async function updateStatus(req, res) {
 
 module.exports = {
     list,
+    deliveryTodayOrderList,
     updateStatus,
 };

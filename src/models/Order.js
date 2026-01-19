@@ -78,6 +78,26 @@ module.exports = (sequelize, DataTypes) => {
                 allowNull: false,
                 validate: { min: 0 },
             },
+
+            // Taxes (GST) + final total
+            gst_rate_bps: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 0,
+                validate: { min: 0 },
+            },
+            gst_amount_paise: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 0,
+                validate: { min: 0 },
+            },
+            grand_total_paise: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 0,
+                validate: { min: 0 },
+            },
             payment_status: {
                 type: DataTypes.TEXT,
                 allowNull: false,

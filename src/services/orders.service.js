@@ -16,6 +16,33 @@ const { AppError } = require("../utils/errors");
 
 const CANCEL_ALLOWED_STATUSES = new Set(["payment_pending", "placed"]);
 
+function sortProductImagesInOrderJson(orderJson) {
+    if (!orderJson) return orderJson;
+
+    const normalizeOneOrder = (o) => {
+        if (Array.isArray(o.items)) {
+            for (const it of o.items) {
+                if (it?.product?.images && Array.isArray(it.product.images)) {
+                    it.product.images.sort((a, b) => {
+                        const soA = a.sort_order ?? 0;
+                        const soB = b.sort_order ?? 0;
+                        if (soA !== soB) return soA - soB;
+                        return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+                    });
+                }
+            }
+        }
+    };
+
+    if (Array.isArray(orderJson)) {
+        for (const o of orderJson) normalizeOneOrder(o);
+        return orderJson;
+    }
+
+    normalizeOneOrder(orderJson);
+    return orderJson;
+}
+
 async function listMyOrders({ userId, query }) {
     const page = query.page || 1;
     const limit = query.limit || 20;
@@ -30,8 +57,23 @@ async function listMyOrders({ userId, query }) {
     const { rows, count } = await Order.findAndCountAll({
         where,
         include: [
-            { model: Warehouse, as: "warehouse", required: false },
+            { model: Warehouse, as: "warehouse", attributes: ["id", "name", "city", "state"], required: false },
             { model: UserAddress, as: "address", required: false },
+
+            // ✅ ADDED: include items + product details for each order in list
+            {
+                model: OrderItem,
+                as: "items",
+                required: false,
+                include: [
+                    {
+                        model: Product,
+                        as: "product",
+                        required: false,
+                        include: [{ model: ProductImage, as: "images", required: false }],
+                    },
+                ],
+            },
         ],
         order: [["created_at", "DESC"]],
         limit,
@@ -39,8 +81,12 @@ async function listMyOrders({ userId, query }) {
         distinct: true,
     });
 
+    // ✅ Ensure deterministic image ordering for UI (same idea as getMyOrderById)
+    const jsonOrders = rows.map((r) => r.toJSON());
+    sortProductImagesInOrderJson(jsonOrders);
+
     return {
-        orders: rows,
+        orders: jsonOrders,
         page,
         limit,
         total: count,
@@ -81,18 +127,7 @@ async function getMyOrderById({ userId, orderId }) {
 
     // Ensure deterministic image ordering for UI
     const json = order.toJSON();
-    if (Array.isArray(json.items)) {
-        for (const it of json.items) {
-            if (it?.product?.images && Array.isArray(it.product.images)) {
-                it.product.images.sort((a, b) => {
-                    const soA = a.sort_order ?? 0;
-                    const soB = b.sort_order ?? 0;
-                    if (soA !== soB) return soA - soB;
-                    return String(a.created_at || "").localeCompare(String(b.created_at || ""));
-                });
-            }
-        }
-    }
+    sortProductImagesInOrderJson(json);
 
     return { order: json };
 }

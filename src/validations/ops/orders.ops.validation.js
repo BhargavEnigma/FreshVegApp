@@ -17,6 +17,13 @@ const opsListOrdersQuerySchema = z.object({
     q: z.string().max(80).optional().nullable(),
 });
 
+const opsDeliveryTodayListOrdersQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    warehouse_id: z.string().uuid().optional().nullable(),
+    q: z.string().max(80).optional().nullable(),
+});
+
 const updateOrderStatusSchema = z.object({
     to_status: z.enum([
         "payment_pending",
@@ -38,5 +45,6 @@ const updateOrderStatusSchema = z.object({
 module.exports = {
     orderIdParamSchema,
     opsListOrdersQuerySchema,
+    opsDeliveryTodayListOrdersQuerySchema,
     updateOrderStatusSchema,
 };

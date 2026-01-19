@@ -40,6 +40,71 @@ function assertTransition(fromStatus, toStatus) {
     }
 }
 
+function sortProductImagesInOrdersJson(ordersJson) {
+    if (!Array.isArray(ordersJson)) return ordersJson;
+
+    for (const o of ordersJson) {
+        if (Array.isArray(o.items)) {
+            for (const it of o.items) {
+                if (it?.product?.images && Array.isArray(it.product.images)) {
+                    it.product.images.sort((a, b) => {
+                        const soA = a.sort_order ?? 0;
+                        const soB = b.sort_order ?? 0;
+                        if (soA !== soB) return soA - soB;
+                        return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+                    });
+                }
+            }
+        }
+    }
+
+    return ordersJson;
+}
+
+async function deliveryTodayOrderList({ actorUserId, query }) {
+    const page = query.page || 1;
+    const limit = query.limit || 50;
+    const offset = (page - 1) * limit;
+
+    const where = {};
+
+    where.status = 'locked';
+    if (query.warehouse_id) {
+        where.warehouse_id = query.warehouse_id;
+    }
+    where.delivery_date = new Date().toLocaleDateString('en-CA', {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric'
+    });
+
+    console.log('WHERE : ', where);
+
+    if (query.q) {
+        where[Op.or] = [{ id: { [Op.iLike]: `${query.q}%` } }];
+    }
+
+    const { rows, count } = await Order.findAndCountAll({
+        where,
+        include: [
+            { model: Warehouse, as: "warehouse", required: false },
+            { model: User, as: "user", required: false, attributes: ["id", "phone", "full_name"] },
+            { model: UserAddress, as: "address", required: false },
+        ],
+        order: [["created_at", "DESC"]],
+        limit,
+        offset,
+        distinct: true,
+    });
+
+    return {
+        orders: rows,
+        page,
+        limit,
+        total: count,
+    };
+}
+
 async function list({ actorUserId, query }) {
     const page = query.page || 1;
     const limit = query.limit || 50;
@@ -67,6 +132,20 @@ async function list({ actorUserId, query }) {
             { model: Warehouse, as: "warehouse", required: false },
             { model: User, as: "user", required: false, attributes: ["id", "phone", "full_name"] },
             { model: UserAddress, as: "address", required: false },
+            // ✅ ADDED: include items + product details for ops/admin list view
+            {
+                model: OrderItem,
+                as: "items",
+                required: false,
+                include: [
+                    {
+                        model: Product,
+                        as: "product",
+                        required: false,
+                        include: [{ model: ProductImage, as: "images", required: false }],
+                    },
+                ],
+            },
         ],
         order: [["created_at", "DESC"]],
         limit,
@@ -74,8 +153,11 @@ async function list({ actorUserId, query }) {
         distinct: true,
     });
 
+    const jsonOrders = rows.map((r) => r.toJSON());
+    sortProductImagesInOrdersJson(jsonOrders);
+
     return {
-        orders: rows,
+        orders: jsonOrders,
         page,
         limit,
         total: count,
@@ -143,5 +225,6 @@ async function updateStatus({ actorUserId, orderId, to_status, note }) {
 
 module.exports = {
     list,
+    deliveryTodayOrderList,
     updateStatus,
 };

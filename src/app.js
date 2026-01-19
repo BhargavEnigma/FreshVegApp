@@ -100,16 +100,9 @@ app.use("/v1/adminSetting", adminSetting);
 app.use("/v1/adminWarehouse", adminWarehouse);
 app.use("/v1/admin/users", adminUsersRoutes);
 app.use("/v1/admin/dashboard", adminDashboardRoutes);
-
 // ✅ Aliases (more consistent paths, keep old ones for backward compatibility)
 app.use("/v1/admin/setting", adminSetting);
 app.use("/v1/admin/warehouse", adminWarehouse);
-
-// Ops/Warehouse (existing paths)
-app.use("/v1/opsOrder", orderOpsRoutes);
-app.use("/v1/opsReports", opsReportsRoutes);
-app.use("/v1/opsJobs", opsJobsRoutes);
-app.use("/v1/opsCategories", opsCategoryRoutes);
 
 // ✅ Aliases (more consistent paths)
 app.use("/v1/ops/orders", orderOpsRoutes);
