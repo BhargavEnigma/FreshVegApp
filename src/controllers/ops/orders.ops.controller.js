@@ -33,18 +33,18 @@ async function list(req, res) {
     }
 }
 
-async function deliveryTodayOrderList(req, res) {
+async function getById(req, res) {
     try {
-        const query = opsDeliveryTodayListOrdersQuerySchema.parse(req.query);
+        const params = orderIdParamSchema.parse(req.params);
 
-        const data = await OpsOrdersService.deliveryTodayOrderList({
+        const data = await OpsOrdersService.getById({
             actorUserId: req.user.userId,
-            query,
+            orderId: params.orderId,
         });
 
         return Response.ok(res, 200, data);
     } catch (e) {
-        console.error("OPS LIST ORDERS ERROR:", e);
+        console.error("OPS GET ORDER ERROR:", e);
         if (e instanceof AppError) {
             return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }
@@ -82,6 +82,6 @@ async function updateStatus(req, res) {
 
 module.exports = {
     list,
-    deliveryTodayOrderList,
+    getById,
     updateStatus,
 };

@@ -339,7 +339,7 @@ async function checkout({ userId, payload }) {
 
         const isCod = payload.payment_method === "cod";
         const initialStatus = isCod ? "placed" : "payment_pending";
-        const initialPaymentStatus = isCod ? "paid" : "pending";
+        const initialPaymentStatus = isCod ? "pending" : "paid";
 
         const order = await Order.create(
             {
