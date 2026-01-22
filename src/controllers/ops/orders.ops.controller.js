@@ -33,6 +33,30 @@ async function list(req, res) {
     }
 }
 
+async function exportCsv(req, res) {
+    try {
+        const query = opsListOrdersQuerySchema.parse(req.query);
+
+        const { csv, filename } = await OpsOrdersService.exportCsv({
+            actorUserId: req.user.userId,
+            query,
+        });
+
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        return res.status(200).send(csv);
+    } catch (e) {
+        console.error("OPS EXPORT CSV ERROR:", e);
+        if (e?.name === "ZodError") {
+            return Response.fail(res, 400, "VALIDATION_ERROR", "Invalid request", e.issues ?? null);
+        }
+        if (e instanceof AppError) {
+            return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
+        }
+        return Response.fail(res, 500, "PROVIDER_ERROR", "Something went wrong");
+    }
+}
+
 async function getById(req, res) {
     try {
         const params = orderIdParamSchema.parse(req.params);
@@ -83,5 +107,6 @@ async function updateStatus(req, res) {
 module.exports = {
     list,
     getById,
+    exportCsv,
     updateStatus,
 };

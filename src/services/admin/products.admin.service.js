@@ -215,11 +215,12 @@ async function createPack({ productId, payload }) {
         }
 
         // Decide whether to use manual prices or computed prices
-        const hasMrp = payload.mrp_paise !== undefined && payload.mrp_paise !== null && payload.mrp_paise !== "";
+        const hasMrp = payload.mrp_paise !== undefined && payload.mrp_paise !== null && payload.mrp_paise !== "" && payload.mrp_paise !== 0;
         const hasSelling =
             payload.selling_price_paise !== undefined &&
             payload.selling_price_paise !== null &&
-            payload.selling_price_paise !== "";
+            payload.selling_price_paise !== "" &&
+            payload.selling_price_paise !== 0;
 
         let mrpToSave;
         let sellingToSave;

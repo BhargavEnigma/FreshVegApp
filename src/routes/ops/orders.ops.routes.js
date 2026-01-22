@@ -9,6 +9,7 @@ const OpsOrdersController = require("../../controllers/ops/orders.ops.controller
 const router = express.Router();
 
 router.get("/", requireAuth, requireRole(["admin", "warehouse_manager"]), asyncHandler(OpsOrdersController.list));
+router.get("/export", requireAuth, requireRole(["admin", "warehouse_manager"]), asyncHandler(OpsOrdersController.exportCsv));
 router.get("/:orderId", requireAuth, requireRole(["admin", "warehouse_manager"]), asyncHandler(OpsOrdersController.getById));
 router.patch("/:orderId/status", requireAuth, requireRole(["admin", "warehouse_manager"]), asyncHandler(OpsOrdersController.updateStatus));
 

@@ -47,8 +47,8 @@ const createPackSchema = z.object({
     label: z.string().min(1).max(40),               // "250g", "500g"
     base_quantity: z.number().positive(),           // 250
     base_unit: z.string().min(1).max(10),           // "g" | "kg" | "pc"
-    mrp_paise: z.number().positive().optional().nullable(),
-    selling_price_paise: z.number().positive().optional().nullable(),
+    mrp_paise: z.number().optional().nullable(),
+    selling_price_paise: z.number().optional().nullable(),
     sort_order: z.number().int().min(0).max(999).optional().nullable(),
     is_active: z.boolean().optional().nullable(),
 });

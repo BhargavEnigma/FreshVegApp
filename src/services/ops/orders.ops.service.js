@@ -123,6 +123,86 @@ async function list({ actorUserId, query }) {
     };
 }
 
+function csvEscape(value) {
+    const s = value == null ? "" : String(value);
+    const needsQuotes = /[",\n]/.test(s);
+    const escaped = s.replace(/"/g, '""');
+    return needsQuotes ? `"${escaped}"` : escaped;
+}
+
+function money(paise) {
+    return (Number(paise || 0) / 100).toFixed(2);
+}
+
+async function exportCsv({ actorUserId, query }) {
+    // Reuse same where-building logic you use in list()
+    // IMPORTANT: keep it lightweight (no items include)
+    const where = {};
+    if (query.status) where.status = query.status;
+    if (query.warehouse_id) where.warehouse_id = query.warehouse_id;
+    if (query.delivery_date) where.delivery_date = query.delivery_date;
+
+    const orders = await Order.findAll({
+        where,
+        include: [
+            { model: Warehouse, as: "warehouse", required: false, attributes: ["id", "name"] },
+            { model: User, as: "user", required: false, attributes: ["id", "phone", "full_name"] },
+        ],
+        order: [["created_at", "DESC"]],
+    });
+
+    const headers = [
+        "order_number",
+        "order_id",
+        "status",
+        "delivery_date",
+        "warehouse",
+        "customer_name",
+        "customer_phone",
+        "subtotal",
+        "delivery_fee",
+        "discount",
+        "gst_amount",
+        "total",
+        "payment_method",
+        "payment_status",
+        "is_locked",
+        "created_at",
+    ];
+
+    const rows = orders.map((o) => {
+        const x = o.toJSON();
+        return [
+            x.order_number || "",
+            x.id || "",
+            x.status || "",
+            x.delivery_date || "",
+            x.warehouse?.name || "",
+            x.user?.full_name || "",
+            x.user?.phone || "",
+            money(x.subtotal_paise),
+            money(x.delivery_fee_paise),
+            money(x.discount_paise),
+            money(x.gst_amount_paise),
+            money(x.total_paise),
+            x.payment_method || "",
+            x.payment_status || "",
+            x.is_locked ? "true" : "false",
+            x.created_at || "",
+        ];
+    });
+
+    const csv = [
+        headers.map(csvEscape).join(","),
+        ...rows.map((r) => r.map(csvEscape).join(",")),
+    ].join("\n");
+
+    const tag = query.delivery_date ? `date-${query.delivery_date}` : "all";
+    const filename = `ops_orders_${tag}_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    return { csv, filename };
+}
+
 async function getById({ actorUserId, orderId }) {
     const order = await Order.findByPk(orderId, {
         include: [
@@ -230,5 +310,6 @@ async function updateStatus({ actorUserId, orderId, to_status, note }) {
 module.exports = {
     list,
     getById,
+    exportCsv,
     updateStatus,
 };
