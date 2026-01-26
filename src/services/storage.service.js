@@ -62,8 +62,32 @@ async function deleteStoredObject({ provider, storagePath }) {
     }
 }
 
+async function uploadBannerImage({ localFilePath, fileName, mimeType, bannerId }) {
+    const bucket = env.supabase.bucket;
+    const storagePath = `banners/${bannerId}/${fileName}`;
+
+    const fileBuffer = fs.readFileSync(localFilePath);
+
+    const { error } = await supabase.storage
+        .from(bucket)
+        .upload(storagePath, fileBuffer, {
+            contentType: mimeType,
+            upsert: false,
+        });
+
+    if (error) throw error;
+
+    const url = await getPublicOrSignedUrl({ storagePath });
+
+    return {
+        path: storagePath,
+        publicUrl: url,
+    };
+}
+
 module.exports = {
     uploadProductImage,
+    uploadBannerImage,
     deleteStoredObject,
     getPublicOrSignedUrl,
 };

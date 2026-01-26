@@ -15,11 +15,13 @@ const settingsRoutes = require("./routes/settings.routes");
 const paymentsRoutes = require("./routes/payments.routes");
 const catalogRoutes = require("./routes/catalog.routes");
 const ordersRoutes = require("./routes/orders.routes");
+const bannersRoutes = require("./routes/banners.routes");
 
 const opsCategoryRoutes = require("./routes/ops/categories.routes");
 const adminProductRoutes = require("./routes/admin/products.routes");
 const adminDeliverySlots = require("./routes/admin/deliverySlots.admin.routes");
 const adminSetting = require("./routes/admin/settings.admin.routes");
+const adminBannersRoutes = require("./routes/admin/banners.admin.routes");
 const orderOpsRoutes = require("./routes/ops/orders.ops.routes");
 const adminWarehouse = require("./routes/admin/warehouses.routes");
 const opsReportsRoutes = require("./routes/ops/reports.ops.routes");
@@ -92,6 +94,7 @@ app.use("/v1/setting", settingsRoutes);
 app.use("/v1/payments", paymentsRoutes);
 app.use("/v1/catalog", catalogRoutes);
 app.use("/v1/orders", ordersRoutes);
+app.use("/v1/banners", bannersRoutes);
 
 // ✅ Admin (move admin delivery slots under /v1/admin/deliveryslot)
 app.use("/v1/admin/product", adminProductRoutes);
@@ -103,6 +106,7 @@ app.use("/v1/admin/dashboard", adminDashboardRoutes);
 // ✅ Aliases (more consistent paths, keep old ones for backward compatibility)
 app.use("/v1/admin/setting", adminSetting);
 app.use("/v1/admin/warehouse", adminWarehouse);
+app.use("/v1/admin/banners", adminBannersRoutes);
 
 // ✅ Aliases (more consistent paths)
 app.use("/v1/ops/orders", orderOpsRoutes);
