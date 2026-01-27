@@ -1,8 +1,10 @@
 "use strict";
 
-const { Op } = require("sequelize");
-const { Category } = require("../models");
+const fs = require("fs");
+const { Op, fn, col } = require("sequelize");
+const { Category, Product, sequelize } = require("../models");
 const { slugify } = require("../utils/slugify");
+const StorageService = require("./storage.service");
 
 function normalizeName(name) {
     return String(name).trim();
@@ -40,13 +42,37 @@ async function listPublic({ q = null }) {
         ];
     }
 
-    return Category.findAll({
+    const rows = await Category.findAll({
         where,
+        include: [
+            {
+                model: Product,
+                as: "products",
+                required: false,
+                attributes: [],
+                where: { is_active: true, is_out_of_stock: false },
+            },
+        ],
         order: [
             ["sort_order", "ASC"],
             ["name", "ASC"],
         ],
-        attributes: ["id", "name", "slug", "is_active", "sort_order"],
+        attributes: [
+            "id",
+            "name",
+            "slug",
+            "is_active",
+            "sort_order",
+            "image_url",
+            [fn("COUNT", col("products.id")), "products_count"],
+        ],
+        group: ["Category.id"],
+    });
+
+    return rows.map((r) => {
+        const json = r.toJSON();
+        json.products_count = Number(json.products_count || 0);
+        return json;
     });
 }
 
@@ -64,13 +90,39 @@ async function listOps({ q = null, include_inactive = false }) {
         ];
     }
 
-    return Category.findAll({
+    const rows = await Category.findAll({
         where,
+        include: [
+            {
+                model: Product,
+                as: "products",
+                required: false,
+                attributes: [],
+                where: { is_active: true },
+            },
+        ],
         order: [
             ["sort_order", "ASC"],
             ["name", "ASC"],
         ],
-        attributes: ["id", "name", "slug", "is_active", "sort_order", "created_at", "updated_at"],
+        attributes: [
+            "id",
+            "name",
+            "slug",
+            "is_active",
+            "sort_order",
+            "image_url",
+            "created_at",
+            "updated_at",
+            [fn("COUNT", col("products.id")), "products_count"],
+        ],
+        group: ["Category.id"],
+    });
+
+    return rows.map((r) => {
+        const json = r.toJSON();
+        json.products_count = Number(json.products_count || 0);
+        return json;
     });
 }
 
@@ -84,56 +136,123 @@ async function getById(id) {
     return row;
 }
 
-async function create({ name, slug = null, is_active = true, sort_order = null }) {
-    const cleanName = normalizeName(name);
-    const finalSlug = slugify(slug || cleanName);
+async function create({ payload, file }) {
+    return sequelize.transaction(async (t) => {
+        const cleanName = normalizeName(payload.name);
+        const finalSlug = slugify(payload.slug || cleanName);
 
-    await ensureUniqueNameAndSlug({ name: cleanName, slug: finalSlug });
+        await ensureUniqueNameAndSlug({ name: cleanName, slug: finalSlug });
 
-    const row = await Category.create({
-        name: cleanName,
-        slug: finalSlug,
-        is_active: is_active ?? true,
-        sort_order,
+        const row = await Category.create(
+            {
+                name: cleanName,
+                slug: finalSlug,
+                is_active: payload.is_active ?? true,
+                sort_order: payload.sort_order ?? null,
+
+                // allow manual url when no file
+                image_url: payload.image_url ?? null,
+                storage_provider: null,
+                storage_path: null,
+            },
+            { transaction: t }
+        );
+
+        // if file uploaded => upload to supabase and update category
+        if (file) {
+            const uploaded = await StorageService.uploadCategoryImage({
+                localFilePath: file.path,
+                fileName: file.filename,
+                mimeType: file.mimetype,
+                categoryId: row.id,
+            });
+
+            try { fs.unlinkSync(file.path); } catch (_) {}
+
+            await row.update(
+                {
+                    storage_provider: "supabase",
+                    storage_path: uploaded.path,
+                    image_url: uploaded.publicUrl,
+                },
+                { transaction: t }
+            );
+        }
+
+        return row;
     });
-
-    return row;
 }
 
-async function update(id, payload) {
-    const row = await getById(id);
+async function update({ categoryId, payload, file }) {
+    return sequelize.transaction(async (t) => {
+        const row = await Category.findByPk(categoryId, { transaction: t, lock: t.LOCK.UPDATE });
+        if (!row) {
+            const err = new Error("Category not found");
+            err.code = "CATEGORY_NOT_FOUND";
+            throw err;
+        }
 
-    const updates = {};
+        const updates = {};
 
-    if (payload.name !== undefined && payload.name !== null) {
-        updates.name = normalizeName(payload.name);
-    }
+        if (payload.name !== undefined && payload.name !== null) {
+            updates.name = normalizeName(payload.name);
+        }
 
-    if (payload.slug !== undefined && payload.slug !== null) {
-        updates.slug = slugify(payload.slug);
-    }
+        if (payload.slug !== undefined && payload.slug !== null) {
+            updates.slug = slugify(payload.slug);
+        }
 
-    if (payload.is_active !== undefined && payload.is_active !== null) {
-        updates.is_active = payload.is_active;
-    }
+        if (payload.is_active !== undefined && payload.is_active !== null) {
+            updates.is_active = payload.is_active;
+        }
 
-    if (payload.sort_order !== undefined && payload.sort_order !== null) {
-        updates.sort_order = payload.sort_order;
-    }
+        if (payload.sort_order !== undefined && payload.sort_order !== null) {
+            updates.sort_order = payload.sort_order;
+        }
 
-    // If name changed but slug not provided, keep slug stable (SEO-friendly).
-    // If you want auto-regenerate slug on name change, set updates.slug = slugify(updates.name).
+        // manual image_url update (only used when no file is uploaded)
+        if (!file && payload.image_url !== undefined) {
+            updates.image_url = payload.image_url;
 
-    const finalName = updates.name ?? row.name;
-    const finalSlug = updates.slug ?? row.slug;
+            if (payload.image_url === null) {
+                updates.storage_provider = null;
+                updates.storage_path = null;
+            }
+        }
 
-    await ensureUniqueNameAndSlug({ name: finalName, slug: finalSlug, excludeId: id });
+        const finalName = updates.name ?? row.name;
+        const finalSlug = updates.slug ?? row.slug;
 
-    await row.update({
-        ...updates,
+        await ensureUniqueNameAndSlug({ name: finalName, slug: finalSlug, excludeId: categoryId });
+
+        // upload file if provided
+        if (file) {
+            const oldProvider = row.storage_provider;
+            const oldPath = row.storage_path;
+
+            const uploaded = await StorageService.uploadCategoryImage({
+                localFilePath: file.path,
+                fileName: file.filename,
+                mimeType: file.mimetype,
+                categoryId: row.id,
+            });
+
+            try { fs.unlinkSync(file.path); } catch (_) {}
+
+            updates.storage_provider = "supabase";
+            updates.storage_path = uploaded.path;
+            updates.image_url = uploaded.publicUrl;
+
+            // delete old object after successful update (best effort)
+            if (oldProvider === "supabase" && oldPath) {
+                await StorageService.deleteStoredObject({ provider: oldProvider, storagePath: oldPath });
+            }
+        }
+
+        await row.update({ ...updates }, { transaction: t });
+
+        return row;
     });
-
-    return row;
 }
 
 async function toggleActive(id, is_active) {

@@ -61,12 +61,13 @@ async function getById(req, res) {
 async function create(req, res) {
     try {
         const body = createCategorySchema.parse(req.body);
+        const file = req.file || null;
+
         const row = await CategoriesService.create({
-            name: body.name,
-            slug: body.slug ?? null,
-            is_active: body.is_active ?? true,
-            sort_order: body.sort_order ?? null,
+            payload: body,
+            file,
         });
+
         return ResponseUtil.created(res, 201, { category: row });
     } catch (e) {
         console.log('CREATE CATEGORY ERROR : ', e);
@@ -78,7 +79,14 @@ async function update(req, res) {
     try {
         const id = uuidSchema.parse(req.params.id);
         const body = updateCategorySchema.parse(req.body);
-        const row = await CategoriesService.update(id, body);
+        const file = req.file || null;
+
+        const row = await CategoriesService.update({
+            categoryId: id,
+            payload: body,
+            file,
+        });
+
         return ResponseUtil.ok(res, 200, { category: row });
     } catch (e) {
         console.log('UPDATE CATEGORY ERROR : ', e);
@@ -90,10 +98,12 @@ async function toggleActive(req, res) {
     try {
         const id = uuidSchema.parse(req.params.id);
 
-        // ✅ FIX: correctly allow false
         let isActive = null;
         if (typeof req.body?.is_active === "boolean") {
             isActive = req.body.is_active;
+        } else if (typeof req.body?.is_active === "string") {
+            if (req.body.is_active === "true") isActive = true;
+            if (req.body.is_active === "false") isActive = false;
         } else if (typeof req.query?.is_active === "string") {
             if (req.query.is_active === "true") isActive = true;
             if (req.query.is_active === "false") isActive = false;
@@ -106,7 +116,7 @@ async function toggleActive(req, res) {
         const row = await CategoriesService.toggleActive(id, isActive);
         return ResponseUtil.ok(res, 200, { category: row });
     } catch (e) {
-        console.log('TOGGLE CATEGORY ACTIVE/INACTIVE ERROR : ', e);
+        console.log("TOGGLE CATEGORY ERROR:", e);
         return handleError(res, e);
     }
 }
