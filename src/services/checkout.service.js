@@ -249,6 +249,52 @@ function addDays(yyyyMmDd, days) {
 
 async function checkout({ userId, payload }) {
     return sequelize.transaction(async (t) => {
+
+        // ✅ Idempotency (recommended for all checkouts)
+        // If the same Idempotency-Key is reused for the same user, return the existing order.
+        if (idempotencyKey) {
+            const existingOrder = await Order.findOne({
+                where: { user_id: userId, idempotency_key: String(idempotencyKey) },
+                transaction: t,
+                lock: t.LOCK.UPDATE,
+            });
+
+            if (existingOrder) {
+                const existingPayment = await Payment.findOne({
+                    where: { order_id: existingOrder.id },
+                    order: [["created_at", "DESC"]],
+                    transaction: t,
+                });
+
+                return {
+                    order: {
+                        id: existingOrder.id,
+                        status: existingOrder.status,
+                        payment_status: existingOrder.payment_status,
+                        total_paise: existingOrder.total_paise,
+                        subtotal_paise: existingOrder.subtotal_paise,
+                        delivery_fee_paise: existingOrder.delivery_fee_paise,
+                        gst_rate_bps: existingOrder.gst_rate_bps,
+                        gst_amount_paise: existingOrder.gst_amount_paise,
+                        grand_total_paise: existingOrder.grand_total_paise,
+                        warehouse_id: existingOrder.warehouse_id,
+                        delivery_date: existingOrder.delivery_date,
+                    },
+                    payment: existingPayment
+                        ? {
+                              id: existingPayment.id,
+                              status: existingPayment.status,
+                              method: existingPayment.method,
+                              provider: existingPayment.provider || null,
+                              provider_payment_id: existingPayment.provider_payment_id || null,
+                              initiation: existingPayment.provider_payload?.initiation || null,
+                          }
+                        : { id: null, status: null, method: payload.payment_method || null },
+                    idempotent: true,
+                };
+            }
+        }
+
         const todayIst = getIstYyyyMmDd();
         const deliveryDate = addDays(todayIst, 1);
 
@@ -266,8 +312,7 @@ async function checkout({ userId, payload }) {
 
         // Fetch packs + products for all items
         const packIds = payload.items.map((i) => i.product_pack_id);
-        console.log('packIds : ', packIds);
-        
+
         const packs = await ProductPack.findAll({
             where: { id: packIds, is_active: true },
             include: [{ model: Product, as: "product", required: true, where: { is_active: true } }],
