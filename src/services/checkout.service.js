@@ -247,7 +247,7 @@ function addDays(yyyyMmDd, days) {
 
 // local cart based from mobile checkout
 
-async function checkout({ userId, payload }) {
+async function checkout({ userId, payload, idempotencyKey = null }) {
     return sequelize.transaction(async (t) => {
 
         // ✅ Idempotency (recommended for all checkouts)
@@ -282,13 +282,13 @@ async function checkout({ userId, payload }) {
                     },
                     payment: existingPayment
                         ? {
-                              id: existingPayment.id,
-                              status: existingPayment.status,
-                              method: existingPayment.method,
-                              provider: existingPayment.provider || null,
-                              provider_payment_id: existingPayment.provider_payment_id || null,
-                              initiation: existingPayment.provider_payload?.initiation || null,
-                          }
+                            id: existingPayment.id,
+                            status: existingPayment.status,
+                            method: existingPayment.method,
+                            provider: existingPayment.provider || null,
+                            provider_payment_id: existingPayment.provider_payment_id || null,
+                            initiation: existingPayment.provider_payload?.initiation || null,
+                        }
                         : { id: null, status: null, method: payload.payment_method || null },
                     idempotent: true,
                 };
@@ -384,7 +384,7 @@ async function checkout({ userId, payload }) {
 
         const isCod = payload.payment_method === "cod";
         const initialStatus = isCod ? "placed" : "payment_pending";
-        const initialPaymentStatus = isCod ? "pending" : "paid";
+        const initialPaymentStatus = "pending";
 
         const order = await Order.create(
             {
@@ -407,6 +407,7 @@ async function checkout({ userId, payload }) {
 
                 total_paise,
                 is_locked: false,
+                idempotency_key: idempotencyKey ? String(idempotencyKey) : null,
             },
             { transaction: t }
         );
@@ -443,13 +444,14 @@ async function checkout({ userId, payload }) {
                 order_id: order.id,
                 amount_paise: total_paise,
                 method: payload.payment_method,
-                status: isCod ? "pending" : "paid",
+                status: "pending",
+                provider: null,
             },
             { transaction: t }
         );
 
-        await Notification.create(
-            {
+        if (isCod) {
+            await Notification.create({
                 user_id: userId,
                 channel: "push",
                 template: "order_placed",
@@ -461,9 +463,8 @@ async function checkout({ userId, payload }) {
                 status: "queued",
                 attempt_count: 0,
                 scheduled_at: null,
-            },
-            { transaction: t }
-        );
+            }, { transaction: t });
+        }
 
         return {
             order: {

@@ -32,7 +32,7 @@ async function list({ query }) {
             {
                 model: ProductPack,
                 as: "packs",
-                required: false,
+                required: true,
                 where: { is_active: true },
             },
         ],

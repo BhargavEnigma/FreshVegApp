@@ -9,6 +9,6 @@ const router = express.Router();
 
 router.get("/", requireAuth, asyncHandler(OrdersController.listMyOrders));
 router.get("/:orderId", requireAuth, asyncHandler(OrdersController.getMyOrderById));
-router.post("/:id/cancel", requireAuth, asyncHandler(OrdersController.cancelMyOrder));
+router.post("/:orderId/cancel", requireAuth, asyncHandler(OrdersController.cancelMyOrder));
 
 module.exports = router;

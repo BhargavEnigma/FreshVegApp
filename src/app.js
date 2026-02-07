@@ -28,6 +28,7 @@ const orderOpsRoutes = require("./routes/ops/orders.ops.routes");
 const adminWarehouse = require("./routes/admin/warehouses.routes");
 const opsReportsRoutes = require("./routes/ops/reports.ops.routes");
 const opsJobsRoutes = require("./routes/ops/jobs.ops.routes");
+const opsSchedulerRoutes = require("./routes/ops/scheduler.ops.routes.js");
 
 // Admin users + dashboard
 const adminUsersRoutes = require("./routes/admin/users.admin.routes");
@@ -54,7 +55,8 @@ try {
 
 // ✅ Raw body for webhook only
 app.use((req, res, next) => {
-    if (req.originalUrl === "/v1/payments/webhook") {
+    // Note: originalUrl may include query string, so use startsWith.
+    if (String(req.originalUrl || "").startsWith("/v1/payments/webhook")) {
         let data = "";
         req.setEncoding("utf8");
         req.on("data", (chunk) => {
@@ -116,6 +118,7 @@ app.use("/v1/admin/deals", adminDealsRoutes);
 app.use("/v1/ops/orders", orderOpsRoutes);
 app.use("/v1/ops/reports", opsReportsRoutes);
 app.use("/v1/ops/jobs", opsJobsRoutes);
+app.use("/v1/ops/scheduler", opsSchedulerRoutes);
 app.use("/v1/ops/categories", opsCategoryRoutes);
 
 app.use(notFound);

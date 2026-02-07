@@ -31,10 +31,13 @@ const { checkoutSchema, checkoutLocalSchema } = require("../validations/checkout
 async function checkout(req, res) {
     try {
         const body = checkoutLocalSchema.parse(req.body);
+        // ✅ Case-insensitive header lookup
+        const idempotencyKey = req.get("X-Idempotency-Key") || null;
 
         const data = await CheckoutService.checkout({
             userId: req.user.userId,
             payload: body,
+            idempotencyKey
         });
 
         return Response.created(res, 201, data);

@@ -11,6 +11,8 @@ const {
     Warehouse,
     OrderStatusEvent,
     Notification,
+    Refund,
+    Payment,
 } = require("../models");
 const { AppError } = require("../utils/errors");
 
@@ -154,10 +156,73 @@ async function cancelMyOrder({ userId, orderId, reason }) {
 
         const fromStatus = order.status;
 
+        // ✅ If UPI already paid, initiate refund (do not lie by setting payment_status back to pending)
+        let refundInfo = null;
+
+        if (order.payment_method === "upi" && order.payment_status === "paid") {
+            const payment = await Payment.findOne({
+                where: { order_id: order.id, provider: "razorpay" },
+                order: [["created_at", "DESC"]],
+                transaction: t,
+                lock: t.LOCK.UPDATE,
+            });
+
+            const razorpayPaymentId = payment?.provider_payment_id;
+
+            if (!razorpayPaymentId) {
+                throw new AppError(
+                    "REFUND_NOT_POSSIBLE",
+                    "Paid order cannot be cancelled because Razorpay payment id is missing",
+                    400
+                );
+            }
+
+            // Create refund row (initiated)
+            const refundRow = await Refund.create(
+                {
+                    order_id: order.id,
+                    payment_id: payment.id,
+                    status: "initiated",
+                    amount_paise: order.total_paise,
+                    provider_refund_id: null,
+                    provider_payload: null,
+                },
+                { transaction: t }
+            );
+
+            const refundResp = await PaymentsService.razorpayCreateRefund({
+                razorpayPaymentId,
+                amountPaise: order.total_paise,
+                notes: {
+                    fv_order_id: String(order.id),
+                    fv_order_number: String(order.order_number || ""),
+                    reason: reason || undefined,
+                },
+            });
+
+            refundInfo = {
+                id: refundRow.id,
+                provider_refund_id: refundResp?.id || null,
+                status: String(refundResp?.status || "initiated"),
+            };
+
+            await refundRow.update(
+                {
+                    provider_refund_id: refundInfo.provider_refund_id,
+                    provider_payload: refundResp,
+                    // If Razorpay immediately returns processed, mark succeeded
+                    status: refundInfo.status === "processed" ? "succeeded" : "initiated",
+                },
+                { transaction: t }
+            );
+        }
+
         await order.update(
             {
                 status: "cancelled",
-                payment_status: order.payment_method === "cod" ? order.payment_status : "pending",
+                cancelled_at: new Date(),
+                cancellation_reason: reason || null,
+                // ✅ Do NOT downgrade payment_status. Leave it as-is.
             },
             { transaction: t }
         );
@@ -169,7 +234,7 @@ async function cancelMyOrder({ userId, orderId, reason }) {
                 to_status: "cancelled",
                 actor_user_id: userId,
                 note: reason || null,
-                meta: { source: "customer" },
+                meta: { source: "customer", refund: refundInfo },
             },
             { transaction: t }
         );
@@ -179,7 +244,7 @@ async function cancelMyOrder({ userId, orderId, reason }) {
                 user_id: userId,
                 channel: "push",
                 template: "order_cancelled",
-                payload: { order_id: order.id },
+                payload: { order_id: order.id, refund: refundInfo },
                 status: "queued",
                 attempt_count: 0,
                 scheduled_at: null,
@@ -187,7 +252,7 @@ async function cancelMyOrder({ userId, orderId, reason }) {
             { transaction: t }
         );
 
-        return { order: { id: order.id, status: order.status } };
+        return { order: { id: order.id, status: order.status }, refund: refundInfo };
     });
 }
 

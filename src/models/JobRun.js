@@ -30,6 +30,21 @@ module.exports = (sequelize, DataTypes) => {
                 allowNull: true,
                 defaultValue: null,
             },
+            scheduled_for: {
+                type: DataTypes.DATE,
+                allowNull: true,
+                defaultValue: null,
+            },
+            error_message: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+                defaultValue: null,
+            },
+            trigger_source: {
+                type: DataTypes.STRING(20),
+                allowNull: true,
+                defaultValue: null,
+            },
             meta: {
                 type: DataTypes.JSONB,
                 allowNull: true,
@@ -44,6 +59,7 @@ module.exports = (sequelize, DataTypes) => {
             updatedAt: false,
             indexes: [
                 { name: "job_runs_job_name_run_key_uniq", unique: true, fields: ["job_name", "run_key"] },
+                { name: "job_runs_job_name_started_at_idx", fields: ["job_name", "started_at"] }
             ],
         }
     );

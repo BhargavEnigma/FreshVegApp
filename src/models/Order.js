@@ -127,6 +127,10 @@ module.exports = (sequelize, DataTypes) => {
                 type: DataTypes.TEXT,
                 allowNull: true,
             },
+            idempotency_key: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
         },
         {
             tableName: "orders",
@@ -139,6 +143,7 @@ module.exports = (sequelize, DataTypes) => {
                 { name: "orders_status_idx", fields: ["status"] },
                 { name: "orders_delivery_date_idx", fields: ["delivery_date"] },
                 { name: "orders_locked_idx", fields: ["is_locked"] },
+                { name: "orders_user_idempotency_key_uniq", fields: ["user_id", "idempotency_key"], unique: true },
             ],
         }
     );
