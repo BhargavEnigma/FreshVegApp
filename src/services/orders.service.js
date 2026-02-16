@@ -15,6 +15,7 @@ const {
     Payment,
 } = require("../models");
 const { AppError } = require("../utils/errors");
+const PaymentsService = require("../services/payments.service");
 
 const CANCEL_ALLOWED_STATUSES = new Set(["payment_pending", "placed"]);
 
@@ -159,7 +160,7 @@ async function cancelMyOrder({ userId, orderId, reason }) {
         // ✅ If UPI already paid, initiate refund (do not lie by setting payment_status back to pending)
         let refundInfo = null;
 
-        if (order.payment_method === "upi" && order.payment_status === "paid") {
+        if (order.payment_method === "online" && order.payment_status === "paid") {
             const payment = await Payment.findOne({
                 where: { order_id: order.id, provider: "razorpay" },
                 order: [["created_at", "DESC"]],

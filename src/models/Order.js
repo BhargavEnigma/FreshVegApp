@@ -108,7 +108,7 @@ module.exports = (sequelize, DataTypes) => {
                 type: DataTypes.TEXT,
                 allowNull: false,
                 defaultValue: "cod",
-                validate: { isIn: [["cod", "upi"]] },
+                validate: { isIn: [["cod", "online"]] },
             },
             is_locked: {
                 type: DataTypes.BOOLEAN,

@@ -45,4 +45,18 @@ router.put("/reorder", requireAuth, requireRole(["admin"]), asyncHandler(AdminBa
 
 router.delete("/:bannerId", requireAuth, requireRole(["admin"]), asyncHandler(AdminBannersController.remove));
 
+router.get(
+    "/options/products",
+    requireAuth,
+    requireRole(["admin"]),
+    AdminBannersController.listProducts
+);
+
+router.get(
+    "/options/categories",
+    requireAuth,
+    requireRole(["admin"]),
+    AdminBannersController.listCategories
+);
+
 module.exports = router;

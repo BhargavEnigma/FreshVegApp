@@ -3,7 +3,7 @@
 const fs = require("fs");
 const { Op } = require("sequelize");
 
-const { sequelize, Banner } = require("../../models");
+const { sequelize, Banner, Product, Category } = require("../../models");
 const { AppError } = require("../../utils/errors");
 const StorageService = require("../storage.service");
 
@@ -242,6 +242,58 @@ async function reorder({ ids }) {
     });
 }
 
+function toInt(value, fallback) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    return n;
+}
+
+async function listProducts(query = {}) {
+    const limit = Math.min(toInt(query.limit, 200), 500);
+    const q = (query.q || "").trim();
+
+    const where = { is_active: true };
+
+    if (q) {
+        where.name = { [Op.iLike]: `%${q}%` };
+    }
+
+    const rows = await Product.findAll({
+        where,
+        attributes: ["id", "name"],
+        order: [["name", "ASC"]],
+        limit,
+    });
+
+    return {
+        count: rows.length,
+        items: rows.map((r) => ({ id: r.id, name: r.name })),
+    };
+}
+
+async function listCategories(query = {}) {
+    const limit = Math.min(toInt(query.limit, 200), 500);
+    const q = (query.q || "").trim();
+
+    const where = { is_active: true };
+
+    if (q) {
+        where.name = { [Op.iLike]: `%${q}%` };
+    }
+
+    const rows = await Category.findAll({
+        where,
+        attributes: ["id", "name"],
+        order: [["name", "ASC"]],
+        limit,
+    });
+
+    return {
+        count: rows.length,
+        items: rows.map((r) => ({ id: r.id, name: r.name })),
+    };
+}
+
 module.exports = {
     list,
     create,
@@ -251,4 +303,6 @@ module.exports = {
     setActive,
     remove,
     reorder,
+    listProducts,
+    listCategories,
 };

@@ -187,6 +187,30 @@ async function reorder(req, res) {
     }
 }
 
+async function listProducts(req, res, next) {
+    try {
+        const data = await BannersAdminService.listProducts(req.query);
+        return res.status(200).json({
+            success: true,
+            data,
+        });
+    } catch (e) {
+        return next(e);
+    }
+}
+
+async function listCategories(req, res, next) {
+    try {
+        const data = await BannersAdminService.listCategories(req.query);
+        return res.status(200).json({
+            success: true,
+            data,
+        });
+    } catch (e) {
+        return next(e);
+    }
+}
+
 module.exports = {
     list,
     create,
@@ -196,4 +220,6 @@ module.exports = {
     setActive,
     remove,
     reorder,
+    listProducts,
+    listCategories,
 };

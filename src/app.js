@@ -17,6 +17,7 @@ const catalogRoutes = require("./routes/catalog.routes");
 const ordersRoutes = require("./routes/orders.routes");
 const bannersRoutes = require("./routes/banners.routes");
 const dealsRoutes = require("./routes/deals.routes");
+const devicesRoutes = require("./routes/devices.routes");
 
 const opsCategoryRoutes = require("./routes/ops/categories.routes");
 const adminProductRoutes = require("./routes/admin/products.routes");
@@ -100,6 +101,7 @@ app.use("/v1/catalog", catalogRoutes);
 app.use("/v1/orders", ordersRoutes);
 app.use("/v1/banners", bannersRoutes);
 app.use("/v1/deals", dealsRoutes);
+app.use("/v1/devices", devicesRoutes);
 
 // ✅ Admin (move admin delivery slots under /v1/admin/deliveryslot)
 app.use("/v1/admin/product", adminProductRoutes);

@@ -157,7 +157,7 @@ const safeQuery = async (sql) => {
         await safeQuery(`
             ALTER TABLE orders
             ADD CONSTRAINT orders_payment_method_check
-            CHECK (payment_method IN ('cod','upi'));
+            CHECK (payment_method IN ('cod','online'));
         `);
 
         await safeQuery(`

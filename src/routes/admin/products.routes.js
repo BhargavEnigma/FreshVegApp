@@ -29,6 +29,7 @@ router.put(
     productImagesUpload.array("images", 10),
     asyncHandler(AdminProductsController.updateWithImages)
 );
+router.get("/", requireAuth, requireRole(["admin"]), asyncHandler(AdminProductsController.list));
 router.patch("/:productId/active", requireAuth, requireRole(["admin"]), asyncHandler(AdminProductsController.setActive));
 router.delete("/:productId", requireAuth, requireRole(["admin"]), AdminProductsController.deleteProduct);
 

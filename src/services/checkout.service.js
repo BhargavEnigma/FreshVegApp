@@ -64,6 +64,18 @@ function addDays(yyyyMmDd, days) {
     return `${yy}-${mm}-${dd}`;
 }
 
+function normalizePaymentMethod(input) {
+    const v = String(input || "").trim().toLowerCase();
+
+    // Backward compatibility: old clients may send "upi"
+    if (v === "upi") return "online";
+
+    // Accept only these two
+    if (v === "cod" || v === "online") return v;
+
+    return null;
+}
+
 // server cart-based checkout
 // async function checkout({ userId, payload }) {
 //     return sequelize.transaction(async (t) => {
@@ -250,6 +262,11 @@ function addDays(yyyyMmDd, days) {
 async function checkout({ userId, payload, idempotencyKey = null }) {
     return sequelize.transaction(async (t) => {
 
+        const paymentMethod = normalizePaymentMethod(payload.payment_method);
+        if (!paymentMethod) {
+            throw new AppError("INVALID_PAYMENT_METHOD", "payment_method must be 'cod' or 'online'", 400);
+        }
+        
         // ✅ Idempotency (recommended for all checkouts)
         // If the same Idempotency-Key is reused for the same user, return the existing order.
         if (idempotencyKey) {

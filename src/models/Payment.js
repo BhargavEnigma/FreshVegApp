@@ -17,7 +17,7 @@ module.exports = (sequelize, DataTypes) => {
             method: {
                 type: DataTypes.TEXT,
                 allowNull: false,
-                validate: { isIn: [["cod", "upi"]] },
+                validate: { isIn: [["cod", "online"]] },
             },
             status: {
                 type: DataTypes.TEXT,

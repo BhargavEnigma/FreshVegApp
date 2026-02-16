@@ -198,7 +198,7 @@ function normalizeRazorpayWebhook(payload) {
         order_id: fv_order_id,
         provider_order_id,
         provider_payment_id,
-        method: "upi",
+        method: "online",
         amount_paise,
         provider_payload: payload,
     };
@@ -213,7 +213,7 @@ function normalizeGenericWebhook(payload) {
         order_id: payload.order_id || null,
         provider_order_id: payload.provider_order_id || null,
         provider_payment_id: payload.provider_payment_id || payload.payment_id || null,
-        method: payload.method || "upi",
+        method: payload.method || "online",
         amount_paise: Number(payload.amount_paise || 0),
         provider_payload: payload,
     };
@@ -269,7 +269,7 @@ async function applyPaymentUpdate({ normalized, t }) {
         payment = await Payment.create(
             {
                 order_id,
-                method: normalized.method || "upi",
+                method: normalized.method || "online",
                 status: status || "pending",
                 amount_paise: Number(normalized.amount_paise || 0),
                 provider,
@@ -447,7 +447,7 @@ async function razorpayCreateOrder({ userId, orderId }) {
             throw new AppError("ORDER_NOT_PAYABLE", `Order is not payable in status: ${order.status}`, 400);
         }
 
-        if (order.payment_method !== "upi") {
+        if (order.payment_method !== "online") {
             throw new AppError("INVALID_PAYMENT_METHOD", "This order is not configured for online payment", 400);
         }
 
@@ -493,7 +493,7 @@ async function razorpayCreateOrder({ userId, orderId }) {
             where: {
                 order_id: order.id,
                 status: "pending",
-                method: "upi",
+                method: "online",
             },
             order: [["created_at", "DESC"]],
             transaction: t,
@@ -518,7 +518,7 @@ async function razorpayCreateOrder({ userId, orderId }) {
             payment = await Payment.create(
                 {
                     order_id: order.id,
-                    method: "upi",
+                    method: "online",
                     status: "pending",
                     amount_paise: order.total_paise,
                     provider: "razorpay",
@@ -623,7 +623,7 @@ async function razorpayVerifyPayment({ userId, payload }) {
             order_id: order.id,
             provider_order_id: payload.razorpay_order_id,
             provider_payment_id: payload.razorpay_payment_id,
-            method: "upi",
+            method: "online",
             amount_paise: order.total_paise,
             provider_payload: {
                 verified: true,
