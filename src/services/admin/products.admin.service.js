@@ -45,6 +45,7 @@ async function createProduct({ payload }) {
 
                 is_active: payload.is_active ?? true,
                 is_out_of_stock: payload.is_out_of_stock ?? false,
+                tag: payload.tag ?? null,
             },
             { transaction: t }
         );
@@ -72,7 +73,7 @@ async function createWithImages({ payload, files }) {
             });
 
             uploaded.push({
-                storage_provider: "supabase",
+                storage_provider: process.env.STORAGE_PROVIDER || "local",
                 storage_path: uploadRes.path,
                 image_url: uploadRes.publicUrl,
                 mime_type: file.mimetype,
@@ -112,6 +113,7 @@ async function updateProduct({ productId, payload }) {
 
                 is_active: payload.is_active ?? product.is_active,
                 is_out_of_stock: payload.is_out_of_stock ?? product.is_out_of_stock,
+                tag: payload.tag ?? product.tag,
             },
             { transaction: t }
         );
@@ -143,6 +145,7 @@ async function updateWithImages({ productId, payload, files }) {
 
                 is_active: payload.is_active ?? product.is_active,
                 is_out_of_stock: payload.is_out_of_stock ?? product.is_out_of_stock,
+                tag: payload.tag ?? product.tag,
             },
             { transaction: t }
         );

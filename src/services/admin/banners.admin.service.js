@@ -169,7 +169,7 @@ async function updateWithImage({ bannerId, payload, file }) {
 
                 ...(uploaded
                     ? {
-                        storage_provider: "supabase",
+                        storage_provider: process.env.STORAGE_PROVIDER || "local",
                         storage_path: uploaded.path,
                         image_url: uploaded.publicUrl,
                     }

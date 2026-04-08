@@ -7,6 +7,11 @@ async function sendPushToToken({ token, title, body, data }) {
         return { ok: false, error: "MISSING_TOKEN" };
     }
 
+    const messaging = getMessaging();
+    if (!messaging) {
+        return { ok: false, error: "FIREBASE_NOT_CONFIGURED" };
+    }
+
     const message = {
         token,
         notification: { title, body },
@@ -15,7 +20,7 @@ async function sendPushToToken({ token, title, body, data }) {
         apns: { payload: { aps: { sound: "default" } } },
     };
 
-    const res = await getMessaging().send(message);
+    const res = await messaging.send(message);
     return { ok: true, message_id: res };
 }
 
@@ -23,6 +28,11 @@ async function sendPushToTokens({ tokens, title, body, data }) {
     const list = (tokens || []).map((t) => String(t || "").trim()).filter(Boolean);
     if (!list.length) {
         return { ok: false, error: "MISSING_TOKENS" };
+    }
+
+    const messaging = getMessaging();
+    if (!messaging) {
+        return { ok: false, error: "FIREBASE_NOT_CONFIGURED" };
     }
 
     const message = {
@@ -33,8 +43,8 @@ async function sendPushToTokens({ tokens, title, body, data }) {
         apns: { payload: { aps: { sound: "default" } } },
     };
 
-    // sendEachForMulticast returns per-token responses (needed to detect invalid tokens)
-    const res = await getMessaging().sendEachForMulticast(message);
+    const res = await messaging.sendEachForMulticast(message);
+
     return {
         ok: true,
         success_count: res.successCount,

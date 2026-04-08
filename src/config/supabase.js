@@ -7,16 +7,22 @@ const { AppError } = require("../utils/errors");
 
 let client = null;
 
-function getSupabaseAdminClient() {
-    if (client) return client;
-
+function ensureSupabaseConfigured() {
     if (!env.supabase || !env.supabase.url || !env.supabase.serviceRoleKey) {
         throw new AppError(
             "SUPABASE_NOT_CONFIGURED",
-            "Supabase is not configured. Set DB_HOST and SUPABASE_SERVICE_ROLE_KEY.",
+            "Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
             500
         );
     }
+}
+
+function getSupabaseAdminClient() {
+    if (client) {
+        return client;
+    }
+
+    ensureSupabaseConfigured();
 
     client = createClient(env.supabase.url, env.supabase.serviceRoleKey, {
         auth: {
@@ -29,4 +35,6 @@ function getSupabaseAdminClient() {
     return client;
 }
 
-module.exports = { getSupabaseAdminClient };
+module.exports = {
+    getSupabaseAdminClient,
+};

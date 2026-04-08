@@ -18,8 +18,6 @@ function getClientMeta(req) {
 
 async function sendOtp(req, res) {
     try {
-        console.log("SEND OTP :", req.body);
-
         const body = sendOtpSchema.parse(req.body);
         const meta = getClientMeta(req);
 

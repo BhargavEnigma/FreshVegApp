@@ -2,10 +2,6 @@
 
 const {
     sequelize,
-    Cart,
-    CartItem,
-    Product,
-    ProductPack,
     UserAddress,
     Order,
     OrderItem,
@@ -13,6 +9,9 @@ const {
     Warehouse,
     OrderStatusEvent,
     Notification,
+    Product,
+    ProductPack,
+    DeliverySlot
 } = require("../models");
 
 const { AppError } = require("../utils/errors");
@@ -39,19 +38,29 @@ async function getDefaultWarehouseId({ t }) {
     return wh.id;
 }
 
-function getIstYyyyMmDd() {
+function getIstDateParts(date = new Date()) {
     const parts = new Intl.DateTimeFormat("en-CA", {
         timeZone: "Asia/Kolkata",
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
-    }).formatToParts(new Date());
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    }).formatToParts(date);
 
-    const y = parts.find((p) => p.type === "year").value;
-    const m = parts.find((p) => p.type === "month").value;
-    const d = parts.find((p) => p.type === "day").value;
+    return {
+        year: parts.find((p) => p.type === "year").value,
+        month: parts.find((p) => p.type === "month").value,
+        day: parts.find((p) => p.type === "day").value,
+        hour: Number(parts.find((p) => p.type === "hour").value),
+        minute: Number(parts.find((p) => p.type === "minute").value),
+    };
+}
 
-    return `${y}-${m}-${d}`;
+function getIstYyyyMmDd(date = new Date()) {
+    const parts = getIstDateParts(date);
+    return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function addDays(yyyyMmDd, days) {
@@ -64,15 +73,19 @@ function addDays(yyyyMmDd, days) {
     return `${yy}-${mm}-${dd}`;
 }
 
+function isBeforeDailyCutoffIst(date = new Date(), cutoffHour = 22, cutoffMinute = 0) {
+    const { hour, minute } = getIstDateParts(date);
+
+    if (hour < cutoffHour) return true;
+    if (hour > cutoffHour) return false;
+
+    return minute < cutoffMinute;
+}
+
 function normalizePaymentMethod(input) {
     const v = String(input || "").trim().toLowerCase();
-
-    // Backward compatibility: old clients may send "upi"
     if (v === "upi") return "online";
-
-    // Accept only these two
     if (v === "cod" || v === "online") return v;
-
     return null;
 }
 
@@ -261,14 +274,19 @@ function normalizePaymentMethod(input) {
 
 async function checkout({ userId, payload, idempotencyKey = null }) {
     return sequelize.transaction(async (t) => {
-
         const paymentMethod = normalizePaymentMethod(payload.payment_method);
         if (!paymentMethod) {
             throw new AppError("INVALID_PAYMENT_METHOD", "payment_method must be 'cod' or 'online'", 400);
         }
-        
-        // ✅ Idempotency (recommended for all checkouts)
-        // If the same Idempotency-Key is reused for the same user, return the existing order.
+
+        if (!isBeforeDailyCutoffIst()) {
+            throw new AppError(
+                "ORDER_CUTOFF_PASSED",
+                "Today cutoff has passed. Please place this order for the next delivery cycle from the app.",
+                400
+            );
+        }
+
         if (idempotencyKey) {
             const existingOrder = await Order.findOne({
                 where: { user_id: userId, idempotency_key: String(idempotencyKey) },
@@ -327,8 +345,26 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
 
         const warehouseId = await getDefaultWarehouseId({ t });
 
+        const groupedItemsMap = new Map();
+
+        for (const item of payload.items) {
+            const key = `${item.product_id}:${item.product_pack_id}`;
+            const existing = groupedItemsMap.get(key);
+
+            if (existing) {
+                existing.quantity += Number(item.quantity);
+            } else {
+                groupedItemsMap.set(key, {
+                    product_id: item.product_id,
+                    product_pack_id: item.product_pack_id,
+                    quantity: Number(item.quantity),
+                });
+            }
+        }
+
+        const groupedItems = Array.from(groupedItemsMap.values());
         // Fetch packs + products for all items
-        const packIds = payload.items.map((i) => i.product_pack_id);
+        const packIds = groupedItems.map((i) => i.product_pack_id);
 
         const packs = await ProductPack.findAll({
             where: { id: packIds, is_active: true },
@@ -343,7 +379,7 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
         const normalizedItems = payload.items.map((it) => {
 
             if (!it?.product_id || !it?.product_pack_id) {
-                throw new AppError("INVALID_ITEM", "Each item must include product_id and product_pack_id", 400); // ✅ EDITED
+                throw new AppError("INVALID_ITEM", "Each item must include product_id and product_pack_id", 400);
             }
 
             const pack = packMap.get(it.product_pack_id);
@@ -376,20 +412,12 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
             }
 
             const lineTotal = Math.round(qty * unitPrice);
-
             subtotal_paise += lineTotal;
 
-            return {
-                qty,
-                unitPrice,
-                lineTotal,
-                product,
-                pack,
-            };
+            return { qty, unitPrice, lineTotal, product, pack };
         });
 
         const discount_paise = 0;
-
         const totals = await computeOrderTotals({ subtotal_paise, t });
         const delivery_fee_paise = totals.delivery_fee_paise;
         const gst_rate_bps = totals.gst_rate_bps;
@@ -399,9 +427,28 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
         // Backward compatibility: keep using total_paise everywhere (mobile already expects it)
         const total_paise = grand_total_paise - discount_paise;
 
-        const isCod = payload.payment_method === "cod";
+        const isCod = paymentMethod === "cod";
         const initialStatus = isCod ? "placed" : "payment_pending";
-        const initialPaymentStatus = "pending";
+        const initialPaymentStatus = isCod ? "pending" : "pending";
+
+        let deliverySlotId = null;
+
+        if (payload.delivery_slot_id) {
+            const slot = await DeliverySlot.findOne({
+                where: {
+                    id: payload.delivery_slot_id,
+                    is_active: true,
+                },
+                transaction: t,
+                lock: t.LOCK.UPDATE,
+            });
+
+            if (!slot) {
+                throw new AppError("DELIVERY_SLOT_NOT_FOUND", "Delivery slot not found", 404);
+            }
+
+            deliverySlotId = slot.id;
+        }
 
         const order = await Order.create(
             {
@@ -409,19 +456,33 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
                 user_id: userId,
                 warehouse_id: warehouseId,
                 address_id: address.id,
+
+                // frozen delivery snapshot
+                delivery_label: address.label ?? null,
+                delivery_name: address.name ?? null,
+                delivery_phone: address.phone ?? null,
+                delivery_address_line1: address.address_line1 ?? null,
+                delivery_address_line2: address.address_line2 ?? null,
+                delivery_landmark: address.landmark ?? null,
+                delivery_area: address.area ?? null,
+                delivery_city: address.city ?? null,
+                delivery_state: address.state ?? null,
+                delivery_pincode: address.pincode ?? null,
+                delivery_lat: address.lat ?? null,
+                delivery_lng: address.lng ?? null,
+
                 delivery_date: deliveryDate,
-                delivery_slot_id: null,
+                // delivery_slot_id: null,
+                delivery_slot_id: deliverySlotId,
                 status: initialStatus,
-                payment_method: payload.payment_method,
+                payment_method: paymentMethod,
                 payment_status: initialPaymentStatus,
                 subtotal_paise,
                 delivery_fee_paise,
                 discount_paise,
-
                 gst_rate_bps,
                 gst_amount_paise,
                 grand_total_paise,
-
                 total_paise,
                 is_locked: false,
                 idempotency_key: idempotencyKey ? String(idempotencyKey) : null,
@@ -451,7 +512,7 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
                 to_status: initialStatus,
                 actor_user_id: userId,
                 note: null,
-                meta: { payment_method: payload.payment_method, source: "local_cart" },
+                meta: { payment_method: paymentMethod, source: "local_cart" },
             },
             { transaction: t }
         );
@@ -460,7 +521,7 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
             {
                 order_id: order.id,
                 amount_paise: total_paise,
-                method: payload.payment_method,
+                method: paymentMethod,
                 status: "pending",
                 provider: null,
             },
@@ -468,19 +529,22 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
         );
 
         if (isCod) {
-            await Notification.create({
-                user_id: userId,
-                channel: "push",
-                template: "order_placed",
-                payload: {
-                    order_id: order.id,
-                    total_paise,
-                    delivery_date: order.delivery_date,
+            await Notification.create(
+                {
+                    user_id: userId,
+                    channel: "push",
+                    template: "order_placed",
+                    payload: {
+                        order_id: order.id,
+                        total_paise,
+                        delivery_date: order.delivery_date,
+                    },
+                    status: "queued",
+                    attempt_count: 0,
+                    scheduled_at: null,
                 },
-                status: "queued",
-                attempt_count: 0,
-                scheduled_at: null,
-            }, { transaction: t });
+                { transaction: t }
+            );
         }
 
         return {

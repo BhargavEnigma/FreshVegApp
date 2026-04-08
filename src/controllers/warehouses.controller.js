@@ -25,7 +25,7 @@ async function list(req, res) {
 async function getById(req, res) {
     const warehouse = await WarehouseService.getWarehouseById(req.params.id);
     if (!warehouse) {
-        return ResponseUtil.notFound(res, "Warehouse not found");
+        return ResponseUtil.fail(res, 404, "WAREHOUSE_NOT_FOUND", "Warehouse not found");
     }
 
     return ResponseUtil.ok(res, 200, warehouse);
@@ -40,7 +40,7 @@ async function update(req, res) {
     );
 
     if (!warehouse) {
-        return ResponseUtil.notFound(res, "Warehouse not found");
+        return ResponseUtil.fail(res, 404, "WAREHOUSE_NOT_FOUND", "Warehouse not found");
     }
 
     return ResponseUtil.ok(res, 200, warehouse);
@@ -52,7 +52,7 @@ async function deactivate(req, res) {
     );
 
     if (!warehouse) {
-        return ResponseUtil.notFound(res, "Warehouse not found");
+        return ResponseUtil.fail(res, 404, "WAREHOUSE_NOT_FOUND", "Warehouse not found");
     }
 
     return ResponseUtil.ok(res, 200, warehouse);

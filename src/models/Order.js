@@ -19,17 +19,65 @@ module.exports = (sequelize, DataTypes) => {
                 type: DataTypes.UUID,
                 allowNull: false,
             },
-
-            // ✅ FIX: this is used in checkout.service.js and exists in migrations
             warehouse_id: {
                 type: DataTypes.UUID,
                 allowNull: false,
             },
-
             address_id: {
                 type: DataTypes.UUID,
-                allowNull: false,
+                allowNull: true,
             },
+
+            // frozen delivery snapshot
+            delivery_label: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            delivery_name: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            delivery_phone: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            delivery_address_line1: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            delivery_address_line2: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            delivery_landmark: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            delivery_area: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            delivery_city: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            delivery_state: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            delivery_pincode: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            delivery_lat: {
+                type: DataTypes.DECIMAL(10, 7),
+                allowNull: true,
+            },
+            delivery_lng: {
+                type: DataTypes.DECIMAL(10, 7),
+                allowNull: true,
+            },
+
             delivery_date: {
                 type: DataTypes.DATEONLY,
                 allowNull: false,
@@ -46,9 +94,9 @@ module.exports = (sequelize, DataTypes) => {
                     isIn: [[
                         "payment_pending",
                         "placed",
-                        "confirmed",          // keep for backward compatibility (your DB allows it)
+                        "confirmed",
                         "locked",
-                        "accepted",           // keep for backward compatibility (your DB allows it)
+                        "accepted",
                         "packed",
                         "out_for_delivery",
                         "delivered",
@@ -57,7 +105,6 @@ module.exports = (sequelize, DataTypes) => {
                     ]],
                 },
             },
-
             subtotal_paise: {
                 type: DataTypes.INTEGER,
                 allowNull: false,
@@ -78,8 +125,6 @@ module.exports = (sequelize, DataTypes) => {
                 allowNull: false,
                 validate: { min: 0 },
             },
-
-            // Taxes (GST) + final total
             gst_rate_bps: {
                 type: DataTypes.INTEGER,
                 allowNull: false,
@@ -152,7 +197,6 @@ module.exports = (sequelize, DataTypes) => {
         Order.belongsTo(db.User, { foreignKey: "user_id", as: "user" });
         Order.belongsTo(db.UserAddress, { foreignKey: "address_id", as: "address" });
         Order.belongsTo(db.DeliverySlot, { foreignKey: "delivery_slot_id", as: "delivery_slot" });
-
         Order.belongsTo(db.Warehouse, { foreignKey: "warehouse_id", as: "warehouse" });
 
         Order.hasMany(db.OrderItem, { foreignKey: "order_id", as: "items" });

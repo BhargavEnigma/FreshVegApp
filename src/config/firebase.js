@@ -7,19 +7,14 @@ let firebaseApp = null;
 function getFirebaseApp() {
     if (firebaseApp) return firebaseApp;
 
-    // Option A (recommended on Render): store full JSON in env
-    // FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'
     const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
-    if (!json) {
-        throw new Error("Missing required env var: FIREBASE_SERVICE_ACCOUNT_JSON");
-    }
+    if (!json) return null;
 
     let serviceAccount;
     try {
         serviceAccount = JSON.parse(json);
     } catch (e) {
-        throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON");
+        return null;
     }
 
     firebaseApp = admin.initializeApp({
@@ -30,7 +25,8 @@ function getFirebaseApp() {
 }
 
 function getMessaging() {
-    getFirebaseApp();
+    const app = getFirebaseApp();
+    if (!app) return null;
     return admin.messaging();
 }
 

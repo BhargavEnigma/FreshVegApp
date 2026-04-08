@@ -21,28 +21,32 @@ function nowPlusMinutes(mins) {
 }
 
 function normalizePhone(phone) {
-    const v = String(phone || "").trim();
-    if (/^\d{10}$/.test(v)) {
-        return `91${v}`;
+    const digits = String(phone || "").replace(/\D/g, "");
+    if (/^\d{10}$/.test(digits)) {
+        return `91${digits}`;
     }
-    if (/^91\d{10}$/.test(v)) {
-        return v;
+    if (/^91\d{10}$/.test(digits)) {
+        return digits;
     }
-    return v;
+    return String(phone || "").trim();
 }
 
-async function enforceOtpRateLimit({ phone, purpose }) {
+async function enforceOtpRateLimit({ phone, purpose, ipAddress }) {
     const since = new Date(Date.now() - 15 * 60 * 1000);
 
-    const count = await OtpRequest.count({
-        where: {
-            phone,
-            purpose,
-            created_at: { [Op.gte]: since },
-        },
-    });
+    const where = {
+        purpose,
+        created_at: { [Op.gte]: since },
+        [Op.or]: [{ phone }],
+    };
 
-    if (count >= 5) {
+    if (ipAddress) {
+        where[Op.or].push({ ip_address: ipAddress, phone });
+    }
+
+    const count = await OtpRequest.count({ where });
+
+    if (count >= 3) {
         throw new AppError("RATE_LIMITED", "Too many OTP requests. Try later.", 429);
     }
 }
@@ -50,29 +54,41 @@ async function enforceOtpRateLimit({ phone, purpose }) {
 async function sendOtp({ phone, purpose, ipAddress, userAgent }) {
     const normalizedPhone = normalizePhone(phone);
 
-    await enforceOtpRateLimit({ phone: normalizedPhone, purpose });
+    await enforceOtpRateLimit({ phone: normalizedPhone, purpose, ipAddress });
 
     const expiresAt = nowPlusMinutes(env?.otp?.msg91OTPexpiryMinutes);
+
+    let providerResp;
+    try {
+        providerResp = await sendOtpViaMsg91({
+            phone: normalizedPhone,
+            otpExpiryMinutes: env.otp.msg91OTPexpiryMinutes,
+        });
+    } catch (error) {
+        await OtpRequest.create({
+            phone: normalizedPhone,
+            provider: "msg91",
+            provider_request_id: null,
+            purpose,
+            status: "failed",
+            attempt_count: 0,
+            ip_address: ipAddress || null,
+            user_agent: userAgent || null,
+            expires_at: expiresAt,
+        });
+        throw error;
+    }
 
     const otpReq = await OtpRequest.create({
         phone: normalizedPhone,
         provider: "msg91",
-        provider_request_id: null,
+        provider_request_id: providerResp.provider_request_id,
         purpose,
         status: "sent",
         attempt_count: 0,
         ip_address: ipAddress || null,
         user_agent: userAgent || null,
         expires_at: expiresAt,
-    });
-
-    const providerResp = await sendOtpViaMsg91({
-        phone: normalizedPhone,
-        otpExpiryMinutes: env.otp.msg91OTPexpiryMinutes,
-    });
-
-    await otpReq.update({
-        provider_request_id: providerResp.provider_request_id,
     });
 
     return {
@@ -92,7 +108,6 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
         throw new AppError("OTP_REQUEST_NOT_FOUND", "OTP request not found", 404);
     }
 
-    // ✅ Prevent reuse (Blueprint wants clean flow)
     if (otpReq.status === "verified") {
         throw new AppError("OTP_ALREADY_USED", "OTP already used", 400);
     }
@@ -116,8 +131,11 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
     const providedOtp = String(otp || "").trim();
     const isBypassOtp = bypassEnabled && providedOtp === bypassCode;
 
-    // ✅ Increment attempt count exactly ONCE per verify call
-    await otpReq.update({ attempt_count: otpReq.attempt_count + 1 });
+    await otpReq.update({
+        attempt_count: otpReq.attempt_count + 1,
+        ip_address: ipAddress || otpReq.ip_address,
+        user_agent: userAgent || otpReq.user_agent,
+    });
 
     if (!isBypassOtp) {
         await verifyOtpViaMsg91({ phone: normalizedPhone, otp: providedOtp });
@@ -210,7 +228,7 @@ async function refreshAccessToken({ refresh_token, device_id }) {
     let decoded;
     try {
         decoded = verifyRefreshToken(refresh_token);
-    } catch (e) {
+    } catch (_e) {
         throw new AppError("INVALID_REFRESH_TOKEN", "Invalid/expired refresh token", 401);
     }
 
@@ -228,18 +246,19 @@ async function refreshAccessToken({ refresh_token, device_id }) {
     }
 
     if (session.expires_at && new Date(session.expires_at).getTime() < Date.now()) {
-        throw new AppError("INVALID_REFRESH_TOKEN", "Refresh session expired", 401);
+        throw new AppError("REFRESH_TOKEN_EXPIRED", "Refresh session expired", 401);
     }
 
     if (device_id && session.device_id && device_id !== session.device_id) {
-        // Optional stricter check (Blueprint doesn't forbid this)
-        // throw new AppError("INVALID_REFRESH_TOKEN", "Device mismatch", 401);
+        throw new AppError("INVALID_REFRESH_TOKEN", "Refresh token device mismatch", 401);
     }
 
-    let phone = decoded.phone;
-    if (!phone) {
-        const user = await User.findByPk(decoded.userId, { attributes: ["phone"] });
-        phone = user?.phone || null;
+    const user = await User.findByPk(decoded.userId, { attributes: ["id", "phone", "status"] });
+    if (!user) {
+        throw new AppError("USER_NOT_FOUND", "User not found", 404);
+    }
+    if (user.status !== "active") {
+        throw new AppError("USER_BLOCKED", "User is blocked", 403);
     }
 
     const accessToken = createAccessToken({

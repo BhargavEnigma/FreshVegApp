@@ -46,8 +46,7 @@ function timingSafeEqualHex(a, b) {
 }
 
 function verifyWebhookSignature({ rawBody, signature, secret }) {
-    // allow disabling in dev
-    if (!secret) return true;
+    if (!secret) return false;
     if (!signature) return false;
 
     const computed = crypto
@@ -288,9 +287,17 @@ async function applyPaymentUpdate({ normalized, t }) {
     }
 
     // 4) Final state idempotency
-    if (finalStates.has(payment.status)) {
-        // If already final, do not mutate anything
-        return { received: true, idempotent: true, reason: "already_final" };
+    const current = String(payment.status || "").toLowerCase();
+
+    const allowedTransitions = {
+        pending: new Set(["pending", "paid", "failed", "refunded"]),
+        paid: new Set(["paid", "refunded"]),
+        failed: new Set(["failed"]),
+        refunded: new Set(["refunded"]),
+    };
+
+    if (!allowedTransitions[current]?.has(status)) {
+        return { received: true, idempotent: true, reason: "illegal_transition_ignored" };
     }
 
     // 5) Update payment
@@ -324,6 +331,12 @@ async function applyPaymentUpdate({ normalized, t }) {
     const oldOrderStatus = order.status;
     const oldPaymentStatus = order.payment_status;
 
+    if (status === "paid") {
+        const incomingAmount = Number(normalized.amount_paise || 0);
+        if (!Number.isFinite(incomingAmount) || incomingAmount !== Number(order.total_paise)) {
+            throw new AppError("PAYMENT_AMOUNT_MISMATCH", "Webhook amount does not match order total", 400);
+        }
+    }
     // Map payment status
     let newPaymentStatus = oldPaymentStatus;
     if (status === "paid") newPaymentStatus = "paid";
@@ -404,6 +417,10 @@ async function handleWebhook({ headers, payload, rawBody }) {
         headers["x-webhook-signature"] ||
         headers["x-signature"] ||
         null;
+
+    if (!webhookSecret) {
+        throw new AppError("WEBHOOK_SECRET_MISSING", "Webhook secret is not configured", 500);
+    }
 
     const ok = verifyWebhookSignature({ rawBody, signature, secret: webhookSecret });
     if (!ok) {

@@ -167,11 +167,11 @@ async function create({ payload, file }) {
                 categoryId: row.id,
             });
 
-            try { fs.unlinkSync(file.path); } catch (_) {}
+            try { fs.unlinkSync(file.path); } catch (_) { }
 
             await row.update(
                 {
-                    storage_provider: "supabase",
+                    storage_provider: process.env.STORAGE_PROVIDER || "local",
                     storage_path: uploaded.path,
                     image_url: uploaded.publicUrl,
                 },
@@ -237,7 +237,7 @@ async function update({ categoryId, payload, file }) {
                 categoryId: row.id,
             });
 
-            try { fs.unlinkSync(file.path); } catch (_) {}
+            try { fs.unlinkSync(file.path); } catch (_) { }
 
             updates.storage_provider = "supabase";
             updates.storage_path = uploaded.path;

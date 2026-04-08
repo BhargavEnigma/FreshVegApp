@@ -17,7 +17,10 @@ async function procurementSummary({ delivery_date }) {
         WHERE o.delivery_date = :delivery_date
           AND o.is_locked = true
           AND o.status IN ('placed','confirmed','packed','out_for_delivery','delivered')
-          AND o.payment_status IN ('paid')
+          AND (
+            o.payment_status IN ('paid')
+            OR o.payment_method = 'cod'
+          )
         GROUP BY oi.product_id, oi.product_name, oi.product_pack_id, oi.pack_label
         ORDER BY oi.product_name ASC, oi.pack_label ASC NULLS LAST
         `,

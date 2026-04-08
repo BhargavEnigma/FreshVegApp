@@ -1,12 +1,15 @@
 const { app } = require("./app");
 const { env } = require("./config/env");
-const { testDbConnection } = require("./config/db");
+const { testDbConnection, syncDatabase } = require("./config/db");
+const models = require("./models");
 const { startScheduler } = require("./jobs/scheduler");
 const { startNotificationsWorker } = require("./jobs/notifications.worker");
 
 async function start() {
     await testDbConnection();
     console.log("Database connected");
+
+    // await syncDatabase({ models });
 
     startScheduler();
     startNotificationsWorker();

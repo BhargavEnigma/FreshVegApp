@@ -7,6 +7,7 @@ const createAdminUserSchema = z.object({
     full_name: z.string().min(2).max(120).optional().nullable(),
     email: z.string().email().optional().nullable(),
     roles: z.array(z.string().min(2).max(40)).min(1),
+    warehouse_ids: z.array(z.string().uuid()).optional().default([]),
 });
 
 const listUsersQuerySchema = z.object({
@@ -21,6 +22,7 @@ const listUsersQuerySchema = z.object({
 
 const setRolesSchema = z.object({
     roles: z.array(z.string().min(2).max(40)).min(1),
+    warehouse_ids: z.array(z.string().uuid()).optional().default([]),
 });
 
 module.exports = {

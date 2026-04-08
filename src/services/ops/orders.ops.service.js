@@ -12,25 +12,61 @@ const {
     OrderItem,
     Product,
     ProductImage,
+    UserWarehouseAssignment,
+    UserRole
 } = require("../../models");
 const { AppError } = require("../../utils/errors");
 
-// ✅ Updated transitions with locked
 const ALLOWED_TRANSITIONS = {
     payment_pending: ["placed", "cancelled"],
     placed: ["locked", "accepted", "cancelled"],
     confirmed: ["locked", "accepted", "cancelled"],
-
     locked: ["accepted", "cancelled"],
-
     accepted: ["packed", "cancelled"],
     packed: ["out_for_delivery", "cancelled"],
     out_for_delivery: ["delivered"],
-
     delivered: [],
     cancelled: [],
     refunded: [],
 };
+
+async function getActorWarehouseScope(actorUserId) {
+    const rolesRows = await UserRole.findAll({
+        where: { user_id: actorUserId },
+        attributes: ["role"],
+    });
+
+    const roles = rolesRows.map((r) => r.role);
+    if (roles.includes("admin")) {
+        return { isAdmin: true, warehouseIds: [] };
+    }
+
+    const assignments = await UserWarehouseAssignment.findAll({
+        where: { user_id: actorUserId },
+        attributes: ["warehouse_id"],
+    });
+
+    return {
+        isAdmin: false,
+        warehouseIds: assignments.map((x) => x.warehouse_id),
+    };
+}
+
+async function assertOrderAccessScope({ actorUserId, order }) {
+    const scope = await getActorWarehouseScope(actorUserId);
+
+    if (scope.isAdmin) {
+        return;
+    }
+
+    if (!scope.warehouseIds.length) {
+        throw new AppError("WAREHOUSE_SCOPE_MISSING", "No warehouse assigned to this user", 403);
+    }
+
+    if (!scope.warehouseIds.includes(order.warehouse_id)) {
+        throw new AppError("FORBIDDEN", "You cannot access this order", 403);
+    }
+}
 
 function assertTransition(fromStatus, toStatus) {
     const allowed = ALLOWED_TRANSITIONS[fromStatus] || [];
@@ -64,19 +100,77 @@ function sortProductImagesInOrdersJson(ordersJson) {
     return ordersJson;
 }
 
+function buildAddressSnapshot(orderLike) {
+    if (!orderLike) return null;
+
+    const hasSnapshot =
+        orderLike.delivery_address_line1 ||
+        orderLike.delivery_pincode ||
+        orderLike.delivery_city ||
+        orderLike.delivery_state;
+
+    if (!hasSnapshot) return null;
+
+    return {
+        id: orderLike.address_id || null,
+        label: orderLike.delivery_label ?? null,
+        name: orderLike.delivery_name ?? null,
+        phone: orderLike.delivery_phone ?? null,
+        address_line1: orderLike.delivery_address_line1 ?? null,
+        address_line2: orderLike.delivery_address_line2 ?? null,
+        landmark: orderLike.delivery_landmark ?? null,
+        area: orderLike.delivery_area ?? null,
+        city: orderLike.delivery_city ?? null,
+        state: orderLike.delivery_state ?? null,
+        pincode: orderLike.delivery_pincode ?? null,
+        lat: orderLike.delivery_lat ?? null,
+        lng: orderLike.delivery_lng ?? null,
+    };
+}
+
+function attachAddressFallback(orderJson) {
+    if (!orderJson) return orderJson;
+
+    const applyOne = (o) => {
+        if (!o.address) {
+            o.address = buildAddressSnapshot(o);
+        }
+        return o;
+    };
+
+    if (Array.isArray(orderJson)) {
+        return orderJson.map(applyOne);
+    }
+
+    return applyOne(orderJson);
+}
+
 async function list({ actorUserId, query }) {
-    const page = query.page || 1;
-    const limit = query.limit || 50;
+    const page = Number(query.page || 1);
+    const limit = Number(query.limit || 50);
     const offset = (page - 1) * limit;
 
     const where = {};
+    const scope = await getActorWarehouseScope(actorUserId);
+
+    if (!scope.isAdmin) {
+        if (!scope.warehouseIds.length) {
+            throw new AppError("WAREHOUSE_SCOPE_MISSING", "No warehouse assigned to this user", 403);
+        }
+
+        if (query.warehouse_id && !scope.warehouseIds.includes(query.warehouse_id)) {
+            throw new AppError("FORBIDDEN", "You cannot access another warehouse", 403);
+        }
+
+        where.warehouse_id = query.warehouse_id || { [Op.in]: scope.warehouseIds };
+    } else if (query.warehouse_id) {
+        where.warehouse_id = query.warehouse_id;
+    }
 
     if (query.status) {
         where.status = query.status;
     }
-    if (query.warehouse_id) {
-        where.warehouse_id = query.warehouse_id;
-    }
+
     if (query.delivery_date) {
         where.delivery_date = query.delivery_date;
     }
@@ -91,7 +185,6 @@ async function list({ actorUserId, query }) {
             { model: Warehouse, as: "warehouse", required: false },
             { model: User, as: "user", required: false, attributes: ["id", "phone", "full_name"] },
             { model: UserAddress, as: "address", required: false },
-            // ✅ ADDED: include items + product details for ops/admin list view
             {
                 model: OrderItem,
                 as: "items",
@@ -112,7 +205,8 @@ async function list({ actorUserId, query }) {
         distinct: true,
     });
 
-    const jsonOrders = rows.map((r) => r.toJSON());
+    let jsonOrders = rows.map((r) => r.toJSON());
+    jsonOrders = attachAddressFallback(jsonOrders);
     sortProductImagesInOrdersJson(jsonOrders);
 
     return {
@@ -135,11 +229,24 @@ function money(paise) {
 }
 
 async function exportCsv({ actorUserId, query }) {
-    // Reuse same where-building logic you use in list()
-    // IMPORTANT: keep it lightweight (no items include)
     const where = {};
+    const scope = await getActorWarehouseScope(actorUserId);
+
+    if (!scope.isAdmin) {
+        if (!scope.warehouseIds.length) {
+            throw new AppError("WAREHOUSE_SCOPE_MISSING", "No warehouse assigned to this user", 403);
+        }
+
+        if (query.warehouse_id && !scope.warehouseIds.includes(query.warehouse_id)) {
+            throw new AppError("FORBIDDEN", "You cannot access another warehouse", 403);
+        }
+
+        where.warehouse_id = query.warehouse_id || { [Op.in]: scope.warehouseIds };
+    } else if (query.warehouse_id) {
+        where.warehouse_id = query.warehouse_id;
+    }
+
     if (query.status) where.status = query.status;
-    if (query.warehouse_id) where.warehouse_id = query.warehouse_id;
     if (query.delivery_date) where.delivery_date = query.delivery_date;
 
     const orders = await Order.findAll({
@@ -230,8 +337,11 @@ async function getById({ actorUserId, orderId }) {
         throw new AppError("ORDER_NOT_FOUND", "Order not found", 404);
     }
 
-    const json = order.toJSON();
-    // sort images consistently (same logic as list)
+    await assertOrderAccessScope({ actorUserId, order });
+
+    let json = order.toJSON();
+    json = attachAddressFallback(json);
+
     if (Array.isArray(json.items)) {
         for (const it of json.items) {
             if (it?.product?.images && Array.isArray(it.product.images)) {
@@ -259,9 +369,7 @@ async function updateStatus({ actorUserId, orderId, to_status, note }) {
             throw new AppError("ORDER_NOT_FOUND", "Order not found", 404);
         }
 
-        // ✅ IMPORTANT CHANGE:
-        // is_locked should NOT block ops transitions.
-        // is_locked should block customer modifications/cancel only.
+        await assertOrderAccessScope({ actorUserId, order });
 
         const fromStatus = order.status;
         if (fromStatus === to_status) {
@@ -270,13 +378,20 @@ async function updateStatus({ actorUserId, orderId, to_status, note }) {
 
         assertTransition(fromStatus, to_status);
 
-        await order.update(
-            {
-                status: to_status,
-                // ✅ Do NOT modify is_locked here. Scheduler sets it at midnight.
-            },
-            { transaction: t }
-        );
+        const patch = { status: to_status };
+
+        if (to_status === "cancelled") {
+            patch.is_locked = false;
+            patch.cancelled_at = new Date();
+        }
+        if (to_status === "delivered") {
+            patch.is_locked = true;
+        }
+        if (["accepted", "packed", "out_for_delivery"].includes(to_status)) {
+            patch.is_locked = true;
+        }
+
+        await order.update(patch, { transaction: t });
 
         await OrderStatusEvent.create(
             {

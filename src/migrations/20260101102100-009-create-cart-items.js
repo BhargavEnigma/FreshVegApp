@@ -37,7 +37,6 @@ module.exports = {
             }
         };
 
-        // 1) Add product_pack_id column (nullable for backfill)
         await queryInterface.addColumn("cart_items", "product_pack_id", {
             type: Sequelize.UUID,
             allowNull: true,
@@ -46,7 +45,6 @@ module.exports = {
             onDelete: "RESTRICT",
         });
 
-        // 2) Backfill product_pack_id for existing rows using default active pack for product
         await queryInterface.sequelize.query(`
             UPDATE cart_items ci
             SET product_pack_id = sub.pack_id
@@ -68,7 +66,6 @@ module.exports = {
             WHERE ci.id = sub.cart_item_id;
         `);
 
-        // 3) If any rows still NULL, it means product has no active pack -> fail
         const [rows] = await queryInterface.sequelize.query(`
             SELECT COUNT(*)::int AS cnt
             FROM cart_items
@@ -82,15 +79,11 @@ module.exports = {
             );
         }
 
-        // 4) Drop old unique index (cart_id, product_id) because it blocks multiple packs per product
-        // If index was not present for some reason, ignore safely
         try {
             await queryInterface.removeIndex("cart_items", "cart_items_unique_cart_product");
         } catch (e) {
-            // ignore if missing
         }
 
-        // 5) Make product_pack_id NOT NULL
         await queryInterface.changeColumn("cart_items", "product_pack_id", {
             type: Sequelize.UUID,
             allowNull: false,
@@ -99,35 +92,23 @@ module.exports = {
             onDelete: "RESTRICT",
         });
 
-        // 6) Add correct unique index: (cart_id, product_pack_id)
         await safeAddIndex("cart_items", ["cart_id", "product_pack_id"], {
             unique: true,
             name: "cart_items_unique_cart_pack",
         });
 
-        // 7) Add index on product_pack_id (useful for joins)
         await safeAddIndex("cart_items", ["product_pack_id"], {
             name: "cart_items_pack_id_idx",
         });
 
-        // (Optional) Add a check to ensure product_id matches pack.product_id
-        // This keeps denormalized product_id consistent.
-        // If you don't want this complexity, skip it.
-        await safeQuery(`
-            ALTER TABLE cart_items
-            ADD CONSTRAINT cart_items_product_pack_product_match_check
-            CHECK (
-                product_id = (
-                    SELECT pp.product_id
-                    FROM product_packs pp
-                    WHERE pp.id = product_pack_id
-                )
-            );
-        `);
+        // NOTE:
+        // Do not add a CHECK with a subquery here. PostgreSQL does not allow subqueries
+        // inside CHECK constraints, and it will break fresh database setup.
+        // Consistency is enforced at application level by validating that product_pack_id
+        // belongs to product_id before writes.
     },
 
     async down(queryInterface, Sequelize) {
-        // Remove indexes
         try {
             await queryInterface.removeIndex("cart_items", "cart_items_pack_id_idx");
         } catch (e) {}
@@ -135,15 +116,6 @@ module.exports = {
             await queryInterface.removeIndex("cart_items", "cart_items_unique_cart_pack");
         } catch (e) {}
 
-        // Remove check constraint if created
-        try {
-            await queryInterface.sequelize.query(`
-                ALTER TABLE cart_items
-                DROP CONSTRAINT IF EXISTS cart_items_product_pack_product_match_check;
-            `);
-        } catch (e) {}
-
-        // Make column nullable then drop it
         try {
             await queryInterface.changeColumn("cart_items", "product_pack_id", {
                 type: Sequelize.UUID,
@@ -155,7 +127,6 @@ module.exports = {
             await queryInterface.removeColumn("cart_items", "product_pack_id");
         } catch (e) {}
 
-        // Restore old unique index (for rollback completeness)
         try {
             await queryInterface.addIndex("cart_items", ["cart_id", "product_id"], {
                 unique: true,

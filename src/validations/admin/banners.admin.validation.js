@@ -33,16 +33,50 @@ const createBannerSchema = z.object({
 
 
 const updateBannerSchema = z.object({
-    title: z.string().max(200).nullable().optional(),
-    subtitle: z.string().max(500).nullable().optional(),
-    image_url: z.string().url().nullable().optional(),
+    title: z.preprocess(
+        (val) => val === "" ? undefined : val,
+        z.string().max(200).nullable().optional()
+    ),
+
+    subtitle: z.preprocess(
+        (val) => val === "" ? undefined : val,
+        z.string().max(500).nullable().optional()
+    ),
+
+    image_url: z.preprocess(
+        (val) => val === "" ? null : val,
+        z.string().url().nullable().optional()
+    ),
+
     placement: placementEnum.optional(),
     action_type: actionTypeEnum.optional(),
-    action_value: z.string().max(2000).nullable().optional(),
-    sort_order: z.number().int().min(0).optional(),
-    start_at: z.string().datetime().nullable().optional(),
-    end_at: z.string().datetime().nullable().optional(),
-    is_active: z.boolean().optional(),
+
+    action_value: z.preprocess(
+        (val) => val === "" ? null : val,
+        z.string().max(2000).nullable().optional()
+    ),
+
+    sort_order: z.preprocess((val) => {
+        if (val === "" || val === undefined || val === null) return undefined;
+        return Number(val);
+    }, z.number().int().min(0).optional()),
+
+    start_at: z.preprocess(
+        (val) => val === "" ? null : val,
+        z.string().datetime().nullable().optional()
+    ),
+
+    end_at: z.preprocess(
+        (val) => val === "" ? null : val,
+        z.string().datetime().nullable().optional()
+    ),
+
+    is_active: z.preprocess((val) => {
+        if (val === "" || val === undefined || val === null) return undefined;
+        if (val === true || val === "true") return true;
+        if (val === false || val === "false") return false;
+        return val;
+    }, z.boolean().optional()),
 });
 
 const reorderBannersSchema = z.object({

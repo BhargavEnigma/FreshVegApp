@@ -3,7 +3,6 @@
 const { Op } = require("sequelize");
 const { Product, Category, ProductImage, ProductPack } = require("../models");
 const { AppError } = require("../utils/errors");
-const StorageService = require("./storage.service");
 
 async function list({ query }) {
     const page = query.page || 1;
@@ -24,17 +23,22 @@ async function list({ query }) {
         where.name = { [Op.iLike]: `%${query.q}%` };
     }
 
+    const includeOnlySellable = String(query.sellable_only || "true") === "true";
+
+    const packsInclude = {
+        model: ProductPack,
+        as: "packs",
+        required: includeOnlySellable,
+        where: { is_active: true },
+    };
+
+    console.log('WHERE : ', where);
     const { rows, count } = await Product.findAndCountAll({
         where,
         include: [
             { model: Category, as: "category", required: false },
             { model: ProductImage, as: "images", required: false },
-            {
-                model: ProductPack,
-                as: "packs",
-                required: true,
-                where: { is_active: true },
-            },
+            packsInclude,
         ],
         order: [["created_at", "DESC"]],
         limit,

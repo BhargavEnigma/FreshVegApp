@@ -12,7 +12,8 @@ const checkoutLocalSchema = z.object({
         const x = String(v || "").trim().toLowerCase();
         if (x === "upi") return "online";
         return x;
-    }).refine((v) => v === "cod" || v === "online", "payment_method must be 'cod' or 'online'"), // adjust if more
+    }).refine((v) => v === "cod" || v === "online", "payment_method must be 'cod' or 'online'"),
+    delivery_slot_id: z.string().uuid().optional().nullable(),
     items: z
         .array(
             z.object({

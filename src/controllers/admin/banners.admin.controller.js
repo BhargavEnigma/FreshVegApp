@@ -101,6 +101,7 @@ async function update(req, res) {
 async function updateWithImage(req, res) {
     try {
         const params = bannerIdParamSchema.parse(req.params);
+        console.log('BODY : ', req.body);
         const body = updateBannerSchema.parse(req.body);
         const file = req.file;
 

@@ -19,6 +19,25 @@ const PaymentsService = require("../services/payments.service");
 
 const CANCEL_ALLOWED_STATUSES = new Set(["payment_pending", "placed"]);
 
+function getIstYyyyMmDd(date = new Date()) {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).formatToParts(date);
+
+    const y = parts.find((p) => p.type === "year").value;
+    const m = parts.find((p) => p.type === "month").value;
+    const d = parts.find((p) => p.type === "day").value;
+    return `${y}-${m}-${d}`;
+}
+
+function isCustomerCancellationWindowOpen(order) {
+    if (!order?.delivery_date) return false;
+    return getIstYyyyMmDd() < String(order.delivery_date);
+}
+
 function sortProductImagesInOrderJson(orderJson) {
     if (!orderJson) return orderJson;
 
@@ -46,24 +65,64 @@ function sortProductImagesInOrderJson(orderJson) {
     return orderJson;
 }
 
+function buildAddressSnapshot(orderLike) {
+    if (!orderLike) return null;
+
+    const hasSnapshot =
+        orderLike.delivery_address_line1 ||
+        orderLike.delivery_pincode ||
+        orderLike.delivery_city ||
+        orderLike.delivery_state;
+
+    if (!hasSnapshot) return null;
+
+    return {
+        id: orderLike.address_id || null,
+        label: orderLike.delivery_label ?? null,
+        name: orderLike.delivery_name ?? null,
+        phone: orderLike.delivery_phone ?? null,
+        address_line1: orderLike.delivery_address_line1 ?? null,
+        address_line2: orderLike.delivery_address_line2 ?? null,
+        landmark: orderLike.delivery_landmark ?? null,
+        area: orderLike.delivery_area ?? null,
+        city: orderLike.delivery_city ?? null,
+        state: orderLike.delivery_state ?? null,
+        pincode: orderLike.delivery_pincode ?? null,
+        lat: orderLike.delivery_lat ?? null,
+        lng: orderLike.delivery_lng ?? null,
+    };
+}
+
+function attachAddressFallback(orderJson) {
+    if (!orderJson) return orderJson;
+
+    const applyOne = (o) => {
+        if (!o.address) {
+            o.address = buildAddressSnapshot(o);
+        }
+        return o;
+    };
+
+    if (Array.isArray(orderJson)) {
+        return orderJson.map(applyOne);
+    }
+
+    return applyOne(orderJson);
+}
+
 async function listMyOrders({ userId, query }) {
     const page = query.page || 1;
     const limit = query.limit || 20;
     const offset = (page - 1) * limit;
-
     const where = { user_id: userId };
 
-    if (query.status) {
-        where.status = query.status;
-    }
+    if (query.status) where.status = query.status;
 
     const { rows, count } = await Order.findAndCountAll({
         where,
         include: [
             { model: Warehouse, as: "warehouse", attributes: ["id", "name", "city", "state"], required: false },
-            { model: UserAddress, as: "address", required: false },
-
-            // ✅ ADDED: include items + product details for each order in list
+            // { model: UserAddress, as: "address", required: false },
             {
                 model: OrderItem,
                 as: "items",
@@ -84,16 +143,11 @@ async function listMyOrders({ userId, query }) {
         distinct: true,
     });
 
-    // ✅ Ensure deterministic image ordering for UI (same idea as getMyOrderById)
-    const jsonOrders = rows.map((r) => r.toJSON());
+    let jsonOrders = rows.map((r) => r.toJSON());
+    jsonOrders = attachAddressFallback(jsonOrders);
     sortProductImagesInOrderJson(jsonOrders);
 
-    return {
-        orders: jsonOrders,
-        page,
-        limit,
-        total: count,
-    };
+    return { orders: jsonOrders, page, limit, total: count };
 }
 
 async function getMyOrderById({ userId, orderId }) {
@@ -101,7 +155,7 @@ async function getMyOrderById({ userId, orderId }) {
         where: { id: orderId, user_id: userId },
         include: [
             { model: Warehouse, as: "warehouse", required: false },
-            { model: UserAddress, as: "address", required: false },
+            // { model: UserAddress, as: "address", required: false },
             {
                 model: OrderItem,
                 as: "items",
@@ -119,24 +173,28 @@ async function getMyOrderById({ userId, orderId }) {
                 model: OrderStatusEvent,
                 as: "status_events",
                 required: false,
-                order: [["created_at", "ASC"]],
             },
         ],
+        order: [[{ model: OrderStatusEvent, as: "status_events" }, "created_at", "ASC"]],
     });
 
     if (!order) {
         throw new AppError("ORDER_NOT_FOUND", "Order not found", 404);
     }
 
-    // Ensure deterministic image ordering for UI
-    const json = order.toJSON();
+    let json = order.toJSON();
+    json = attachAddressFallback(json);
     sortProductImagesInOrderJson(json);
 
     return { order: json };
 }
 
 async function cancelMyOrder({ userId, orderId, reason }) {
-    return sequelize.transaction(async (t) => {
+    let payment = null;
+    let refundRowId = null;
+    let orderSnapshot = null;
+
+    await sequelize.transaction(async (t) => {
         const order = await Order.findOne({
             where: { id: orderId, user_id: userId },
             transaction: t,
@@ -147,21 +205,26 @@ async function cancelMyOrder({ userId, orderId, reason }) {
             throw new AppError("ORDER_NOT_FOUND", "Order not found", 404);
         }
 
-        if (order.is_locked) {
-            throw new AppError("ORDER_LOCKED", "Order cannot be modified", 400);
+        if (order.is_locked || !isCustomerCancellationWindowOpen(order)) {
+            throw new AppError("ORDER_LOCKED", "Order cannot be modified after the IST cutoff", 400);
         }
 
         if (!CANCEL_ALLOWED_STATUSES.has(order.status)) {
             throw new AppError("CANNOT_CANCEL", "Order cannot be cancelled at this stage", 400);
         }
 
-        const fromStatus = order.status;
-
-        // ✅ If UPI already paid, initiate refund (do not lie by setting payment_status back to pending)
-        let refundInfo = null;
+        orderSnapshot = {
+            id: order.id,
+            status: order.status,
+            user_id: order.user_id,
+            order_number: order.order_number,
+            total_paise: order.total_paise,
+            payment_method: order.payment_method,
+            payment_status: order.payment_status,
+        };
 
         if (order.payment_method === "online" && order.payment_status === "paid") {
-            const payment = await Payment.findOne({
+            payment = await Payment.findOne({
                 where: { order_id: order.id, provider: "razorpay" },
                 order: [["created_at", "DESC"]],
                 transaction: t,
@@ -169,7 +232,6 @@ async function cancelMyOrder({ userId, orderId, reason }) {
             });
 
             const razorpayPaymentId = payment?.provider_payment_id;
-
             if (!razorpayPaymentId) {
                 throw new AppError(
                     "REFUND_NOT_POSSIBLE",
@@ -178,7 +240,6 @@ async function cancelMyOrder({ userId, orderId, reason }) {
                 );
             }
 
-            // Create refund row (initiated)
             const refundRow = await Refund.create(
                 {
                     order_id: order.id,
@@ -191,39 +252,58 @@ async function cancelMyOrder({ userId, orderId, reason }) {
                 { transaction: t }
             );
 
-            const refundResp = await PaymentsService.razorpayCreateRefund({
-                razorpayPaymentId,
-                amountPaise: order.total_paise,
-                notes: {
-                    fv_order_id: String(order.id),
-                    fv_order_number: String(order.order_number || ""),
-                    reason: reason || undefined,
-                },
-            });
-
-            refundInfo = {
-                id: refundRow.id,
-                provider_refund_id: refundResp?.id || null,
-                status: String(refundResp?.status || "initiated"),
-            };
-
-            await refundRow.update(
-                {
-                    provider_refund_id: refundInfo.provider_refund_id,
-                    provider_payload: refundResp,
-                    // If Razorpay immediately returns processed, mark succeeded
-                    status: refundInfo.status === "processed" ? "succeeded" : "initiated",
-                },
-                { transaction: t }
-            );
+            refundRowId = refundRow.id;
         }
+    });
+
+    let refundInfo = null;
+
+    if (orderSnapshot.payment_method === "online" && orderSnapshot.payment_status === "paid") {
+        const refundResp = await PaymentsService.razorpayCreateRefund({
+            razorpayPaymentId: payment.provider_payment_id,
+            amountPaise: orderSnapshot.total_paise,
+            notes: {
+                fv_order_id: String(orderSnapshot.id),
+                fv_order_number: String(orderSnapshot.order_number || ""),
+                reason: reason || undefined,
+            },
+        });
+
+        refundInfo = {
+            id: refundRowId,
+            provider_refund_id: refundResp?.id || null,
+            status: String(refundResp?.status || "initiated"),
+        };
+
+        await Refund.update(
+            {
+                provider_refund_id: refundInfo.provider_refund_id,
+                provider_payload: refundResp,
+                status: refundInfo.status === "processed" ? "succeeded" : "initiated",
+            },
+            { where: { id: refundRowId } }
+        );
+    }
+
+    await sequelize.transaction(async (t) => {
+        const order = await Order.findOne({
+            where: { id: orderSnapshot.id, user_id: userId },
+            transaction: t,
+            lock: t.LOCK.UPDATE,
+        });
+
+        if (!order) {
+            throw new AppError("ORDER_NOT_FOUND", "Order not found", 404);
+        }
+
+        const fromStatus = order.status;
 
         await order.update(
             {
                 status: "cancelled",
+                is_locked: false,
                 cancelled_at: new Date(),
                 cancellation_reason: reason || null,
-                // ✅ Do NOT downgrade payment_status. Leave it as-is.
             },
             { transaction: t }
         );
@@ -252,9 +332,9 @@ async function cancelMyOrder({ userId, orderId, reason }) {
             },
             { transaction: t }
         );
-
-        return { order: { id: order.id, status: order.status }, refund: refundInfo };
     });
+
+    return { order: { id: orderSnapshot.id, status: "cancelled" }, refund: refundInfo };
 }
 
 module.exports = {

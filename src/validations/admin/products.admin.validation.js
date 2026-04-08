@@ -19,11 +19,12 @@ const createProductSchema = z.object({
     name: z.string().min(2).max(150),
     description: z.string().max(2000).nullable().optional(),
     unit: z.string().max(20).nullable().optional(),
-    is_out_of_stock: z.boolean().optional().nullable(),
-    is_active: z.boolean().optional().nullable(),
-    selling_price_paise: z.number().int().positive(), // Required, not nullable
-    mrp_paise: z.number().int().positive(), // Add this - required based on error
-    base_quantity: z.number().int().positive() // Add this - required based on error
+    is_out_of_stock: z.coerce.boolean().optional().nullable(),
+    is_active: z.coerce.boolean().optional().nullable(),
+    selling_price_paise: z.coerce.number().int().positive(),
+    mrp_paise: z.coerce.number().int().positive(),
+    base_quantity: z.coerce.number().positive(),
+    tag: z.string().max(100).nullable().optional(),
 });
 
 const updateProductSchema = z.object({
@@ -31,11 +32,12 @@ const updateProductSchema = z.object({
     name: z.string().min(2).max(150).optional(),
     description: z.string().max(2000).nullable().optional(),
     unit: z.string().max(20).nullable().optional(),
-    is_out_of_stock: z.boolean().optional().nullable(),
-    is_active: z.boolean().optional().nullable(),
-    selling_price_paise: z.number().int().positive(), // Required, not nullable
-    mrp_paise: z.number().int().positive(), // Add this - required based on error
-    base_quantity: z.number().int().positive() // Add this - required based on error
+    is_out_of_stock: z.coerce.boolean().optional().nullable(),
+    is_active: z.coerce.boolean().optional().nullable(),
+    selling_price_paise: z.coerce.number().int().positive().optional(),
+    mrp_paise: z.coerce.number().int().positive().optional(),
+    base_quantity: z.coerce.number().positive().optional(),
+    tag: z.string().max(100).nullable().optional(),
 });
 
 const setActiveSchema = z.object({
