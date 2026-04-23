@@ -34,6 +34,7 @@ const opsSchedulerRoutes = require("./routes/ops/scheduler.ops.routes.js");
 // Admin users + dashboard
 const adminUsersRoutes = require("./routes/admin/users.admin.routes");
 const adminDashboardRoutes = require("./routes/admin/dashboard.admin.routes");
+const adminOrdersRoutes = require("./routes/admin/orders.admin.routes");
 
 const { env } = require("./config/env");
 const { ensureDir, getUploadsRoot } = require("./utils/uploads");
@@ -41,6 +42,7 @@ const { notFound, errorHandler } = require("./middlewares/error.middleware");
 
 const app = express();
 
+app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
 app.use(helmet());
@@ -115,6 +117,7 @@ app.use("/v1/admin/setting", adminSetting);
 app.use("/v1/admin/warehouse", adminWarehouse);
 app.use("/v1/admin/banners", adminBannersRoutes);
 app.use("/v1/admin/deals", adminDealsRoutes);
+app.use("/v1/admin/orders", adminOrdersRoutes);
 
 // ✅ Aliases (more consistent paths)
 app.use("/v1/ops/orders", orderOpsRoutes);

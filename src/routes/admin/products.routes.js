@@ -10,7 +10,7 @@ const AdminProductsController = require("../../controllers/admin/products.admin.
 const router = express.Router();
 
 router.post("/", requireAuth, requireRole(["admin"]), asyncHandler(AdminProductsController.create));
-
+router.get("/:productId", requireAuth, requireRole(["admin"]), asyncHandler(AdminProductsController.getById));
 // Create product with images in a single multipart/form-data request.
 // FormData fields should match createProductSchema (category_id, name, ...)
 // Files field: images (up to 10 images)

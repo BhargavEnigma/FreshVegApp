@@ -16,6 +16,7 @@ const {
     UserRole
 } = require("../../models");
 const { AppError } = require("../../utils/errors");
+// const InventoryService = require("../inventory.service");
 
 const ALLOWED_TRANSITIONS = {
     payment_pending: ["placed", "cancelled"],
@@ -392,6 +393,20 @@ async function updateStatus({ actorUserId, orderId, to_status, note }) {
         }
 
         await order.update(patch, { transaction: t });
+
+        // if (to_status === "cancelled") {
+        //     await InventoryService.releaseReservedInventoryForOrder({
+        //         orderId: order.id,
+        //         t,
+        //     });
+        // }
+
+        // if (to_status === "delivered") {
+        //     await InventoryService.consumeReservedInventoryForOrder({
+        //         orderId: order.id,
+        //         t,
+        //     });
+        // }
 
         await OrderStatusEvent.create(
             {

@@ -147,13 +147,28 @@ module.exports = (sequelize, DataTypes) => {
                 type: DataTypes.TEXT,
                 allowNull: false,
                 defaultValue: "pending",
-                validate: { isIn: [["pending", "paid", "failed", "refunded"]] },
+                validate: { isIn: [["pending", "provider_order_created", "verification_pending", "paid", "failed", "refund_pending", "refunded", "refund_failed"]] },
             },
             payment_method: {
                 type: DataTypes.TEXT,
                 allowNull: false,
                 defaultValue: "cod",
                 validate: { isIn: [["cod", "online"]] },
+            },
+            retry_allowed: {
+                type: DataTypes.BOOLEAN,
+                allowNull: false,
+                defaultValue: false,
+            },
+            refund_status: {
+                type: DataTypes.TEXT,
+                allowNull: false,
+                defaultValue: "none",
+                validate: { isIn: [["none", "refund_pending", "refunded", "refund_failed"]] },
+            },
+            current_payment_attempt_id: {
+                type: DataTypes.UUID,
+                allowNull: true,
             },
             is_locked: {
                 type: DataTypes.BOOLEAN,
@@ -202,6 +217,8 @@ module.exports = (sequelize, DataTypes) => {
         Order.hasMany(db.OrderItem, { foreignKey: "order_id", as: "items" });
         Order.hasMany(db.OrderStatusHistory, { foreignKey: "order_id", as: "status_history" });
         Order.hasMany(db.Payment, { foreignKey: "order_id", as: "payments" });
+        Order.hasMany(db.PaymentAttempt, { foreignKey: "order_id", as: "payment_attempts" });
+        Order.belongsTo(db.PaymentAttempt, { foreignKey: "current_payment_attempt_id", as: "current_payment_attempt" });
         Order.hasMany(db.Refund, { foreignKey: "order_id", as: "refunds" });
         Order.hasMany(db.OrderStatusEvent, { foreignKey: "order_id", as: "status_events" });
     };

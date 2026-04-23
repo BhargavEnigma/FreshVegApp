@@ -22,7 +22,7 @@ module.exports = (sequelize, DataTypes) => {
             status: {
                 type: DataTypes.TEXT,
                 allowNull: false,
-                validate: { isIn: [["pending", "paid", "failed", "refunded"]] },
+                validate: { isIn: [["pending", "provider_order_created", "verification_pending", "paid", "failed", "refund_pending", "refunded", "refund_failed"]] },
             },
             amount_paise: {
                 type: DataTypes.INTEGER,

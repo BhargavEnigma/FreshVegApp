@@ -16,8 +16,16 @@ const cancelOrderSchema = z.object({
     reason: z.string().max(250).optional().nullable(),
 });
 
+const retryPaymentSchema = z.object({
+    reason: z.string().max(250).optional().nullable(),
+}).optional().default({});
+
+const reconcilePaymentSchema = z.object({}).passthrough();
+
 module.exports = {
     orderIdParamSchema,
     listOrdersQuerySchema,
     cancelOrderSchema,
+    retryPaymentSchema,
+    reconcilePaymentSchema,
 };

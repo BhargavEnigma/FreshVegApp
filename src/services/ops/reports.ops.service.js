@@ -16,7 +16,7 @@ async function procurementSummary({ delivery_date }) {
         JOIN orders o ON o.id = oi.order_id
         WHERE o.delivery_date = :delivery_date
           AND o.is_locked = true
-          AND o.status IN ('placed','confirmed','packed','out_for_delivery','delivered')
+          AND o.status NOT IN ('cancelled', 'refunded', 'payment_pending')
           AND (
             o.payment_status IN ('paid')
             OR o.payment_method = 'cod'

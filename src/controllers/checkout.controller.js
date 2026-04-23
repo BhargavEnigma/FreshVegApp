@@ -40,7 +40,7 @@ async function checkout(req, res) {
             idempotencyKey
         });
 
-        return Response.created(res, 201, data);
+        return Response.created(res, 201, data, null, "Order placed successfully");
     } catch (e) {
         console.log("CHECKOUT_LOCAL ERROR:", e);
 

@@ -99,99 +99,107 @@ async function sendOtp({ phone, purpose, ipAddress, userAgent }) {
 
 async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddress, userAgent }) {
     const normalizedPhone = normalizePhone(phone);
-
-    const otpReq = await OtpRequest.findOne({
-        where: { id: otp_request_id, phone: normalizedPhone, purpose: "login" },
-    });
-
-    if (!otpReq) {
-        throw new AppError("OTP_REQUEST_NOT_FOUND", "OTP request not found", 404);
-    }
-
-    if (otpReq.status === "verified") {
-        throw new AppError("OTP_ALREADY_USED", "OTP already used", 400);
-    }
-
-    if (otpReq.status === "expired") {
-        throw new AppError("OTP_EXPIRED", "OTP expired", 400);
-    }
-
-    if (otpReq.expires_at && new Date(otpReq.expires_at).getTime() < Date.now()) {
-        await otpReq.update({ status: "expired" });
-        throw new AppError("OTP_EXPIRED", "OTP expired", 400);
-    }
-
-    if (otpReq.attempt_count >= 5) {
-        await otpReq.update({ status: "failed" });
-        throw new AppError("INVALID_OTP", "Too many attempts", 400);
-    }
+    const providedOtp = String(otp || "").trim();
 
     const bypassEnabled = env.nodeEnv !== "production" && env?.otp?.bypassEnabled === true;
     const bypassCode = String(env?.otp?.bypassCode || "").trim();
-    const providedOtp = String(otp || "").trim();
     const isBypassOtp = bypassEnabled && providedOtp === bypassCode;
 
-    await otpReq.update({
-        attempt_count: otpReq.attempt_count + 1,
-        ip_address: ipAddress || otpReq.ip_address,
-        user_agent: userAgent || otpReq.user_agent,
-    });
-
-    if (!isBypassOtp) {
-        await verifyOtpViaMsg91({ phone: normalizedPhone, otp: providedOtp });
-    }
-
-    // Provider OK => mark verified
-    await otpReq.update({ status: "verified" });
-
-    // Create/Load user
-    let user = await User.findOne({ where: { phone: normalizedPhone } });
-
-    if (!user) {
-        user = await User.create({
-            phone: normalizedPhone,
-            status: "active",
-            last_login_at: new Date(),
-            fcm_token: fcm_token ?? null,
+    return sequelize.transaction(async (t) => {
+        const otpReq = await OtpRequest.findOne({
+            where: { id: otp_request_id, phone: normalizedPhone, purpose: "login" },
+            transaction: t,
+            lock: t.LOCK.UPDATE,
         });
-    } else {
-        if (user.status === "blocked") {
-            throw new AppError("USER_BLOCKED", "User is blocked", 403);
+
+        if (!otpReq) {
+            throw new AppError("OTP_REQUEST_NOT_FOUND", "OTP request not found", 404);
         }
 
-        const updatePayload = { last_login_at: new Date() };
-        if (fcm_token !== undefined) {
-            updatePayload.fcm_token = fcm_token;
+        if (otpReq.status === "verified") {
+            throw new AppError("OTP_ALREADY_USED", "OTP already used", 400);
         }
 
-        await user.update(updatePayload);
-    }
+        if (otpReq.status === "expired") {
+            throw new AppError("OTP_EXPIRED", "OTP expired", 400);
+        }
 
-    // ✅ Ensure default role exists (Blueprint RBAC)
-    const existingRoles = await UserRole.count({
-        where: { user_id: user.id }
-    });
+        if (otpReq.expires_at && new Date(otpReq.expires_at).getTime() < Date.now()) {
+            await otpReq.update({ status: "expired" }, { transaction: t });
+            throw new AppError("OTP_EXPIRED", "OTP expired", 400);
+        }
 
-    if (existingRoles === 0) {
-        await UserRole.findOrCreate({
-            where: { user_id: user.id, role: "customer" },
-            defaults: { user_id: user.id, role: "customer" },
+        if (otpReq.attempt_count >= 5) {
+            await otpReq.update({ status: "failed" }, { transaction: t });
+            throw new AppError("INVALID_OTP", "Too many attempts", 400);
+        }
+
+        await otpReq.update(
+            {
+                attempt_count: Number(otpReq.attempt_count || 0) + 1,
+                ip_address: ipAddress || otpReq.ip_address,
+                user_agent: userAgent || otpReq.user_agent,
+            },
+            { transaction: t }
+        );
+
+        if (!isBypassOtp) {
+            await verifyOtpViaMsg91({ phone: normalizedPhone, otp: providedOtp });
+        }
+
+        let user = await User.findOne({
+            where: { phone: normalizedPhone },
+            transaction: t,
+            lock: t.LOCK.UPDATE,
         });
-    }
 
+        if (!user) {
+            user = await User.create(
+                {
+                    phone: normalizedPhone,
+                    status: "active",
+                    last_login_at: new Date(),
+                    fcm_token: fcm_token ?? null,
+                },
+                { transaction: t }
+            );
+        } else {
+            if (user.status === "blocked") {
+                throw new AppError("USER_BLOCKED", "User is blocked", 403);
+            }
 
-    const rolesRows = await UserRole.findAll({
-        where: { user_id: user.id },
-        attributes: ["role"],
-    });
+            const updatePayload = { last_login_at: new Date() };
+            if (fcm_token !== undefined) {
+                updatePayload.fcm_token = fcm_token;
+            }
 
-    // Create JWT tokens + store refresh session (hashed)
-    const accessToken = createAccessToken({ userId: user.id, phone: user.phone });
-    const refreshToken = createRefreshToken({ userId: user.id, phone: user.phone });
+            await user.update(updatePayload, { transaction: t });
+        }
 
-    const refreshHash = hashRefreshToken(refreshToken);
+        const existingRoles = await UserRole.count({
+            where: { user_id: user.id },
+            transaction: t,
+        });
 
-    await sequelize.transaction(async (t) => {
+        if (existingRoles === 0) {
+            await UserRole.findOrCreate({
+                where: { user_id: user.id, role: "customer" },
+                defaults: { user_id: user.id, role: "customer" },
+                transaction: t,
+                lock: t.LOCK.UPDATE,
+            });
+        }
+
+        const rolesRows = await UserRole.findAll({
+            where: { user_id: user.id },
+            attributes: ["role"],
+            transaction: t,
+        });
+
+        const accessToken = createAccessToken({ userId: user.id, phone: user.phone });
+        const refreshToken = createRefreshToken({ userId: user.id, phone: user.phone });
+        const refreshHash = hashRefreshToken(refreshToken);
+
         await UserSession.create(
             {
                 user_id: user.id,
@@ -206,22 +214,24 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
             },
             { transaction: t }
         );
-    });
 
-    return {
-        user: {
-            id: user.id,
-            phone: user.phone,
-            status: user.status,
-            roles: rolesRows.map((r) => r.role),
-        },
-        tokens: {
-            access_token: accessToken,
-            access_expires_in_seconds: 15 * 60,
-            refresh_token: refreshToken,
-            refresh_expires_in_seconds: 30 * 24 * 60 * 60,
-        },
-    };
+        await otpReq.update({ status: "verified" }, { transaction: t });
+
+        return {
+            user: {
+                id: user.id,
+                phone: user.phone,
+                status: user.status,
+                roles: rolesRows.map((r) => r.role),
+            },
+            tokens: {
+                access_token: accessToken,
+                access_expires_in_seconds: 15 * 60,
+                refresh_token: refreshToken,
+                refresh_expires_in_seconds: env.jwt.refreshExpiresInDays * 24 * 60 * 60,
+            },
+        };
+    });
 }
 
 async function refreshAccessToken({ refresh_token, device_id }) {

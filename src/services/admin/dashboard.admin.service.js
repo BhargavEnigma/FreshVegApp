@@ -53,7 +53,15 @@ async function getKpis({ range }) {
     ] = await Promise.all([
         Order.count({ where: createdWhere }),
         Order.count({ where: deliveryWhere }),
-        Order.count({ where: { ...createdWhere, payment_status: "pending" } }),
+        Order.count({
+            where: {
+                ...createdWhere,
+                payment_method: "online",
+                payment_status: {
+                    [Op.in]: ["pending", "provider_order_created", "verification_pending", "failed"],
+                },
+            },
+        }),
         Order.sum("total_paise", { where: { ...createdWhere, payment_status: "paid" } }),
         User.count({ where: { status: "active" } }),
         Order.count({

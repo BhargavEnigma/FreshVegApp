@@ -89,7 +89,7 @@ async function recordSchedulerSuccess({ job_name }) {
 async function applyLockOrdersScheduleFromDb() {
     const row = await SchedulerSetting.findOne({ where: { job_name: "lock_orders" }, raw: true });
 
-    const cron_expr = row?.cron_expr || "0 0 * * *";
+    const cron_expr = row?.cron_expr || "30 0 * * *";
     // const cron_expr = "*/1 * * * *";
     const timezone = row?.timezone || "Asia/Kolkata";
     const is_enabled = row?.is_enabled ?? true;

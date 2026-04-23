@@ -11,11 +11,13 @@ const {
     Notification,
     Product,
     ProductPack,
-    DeliverySlot
+    Setting,
 } = require("../models");
 
 const { AppError } = require("../utils/errors");
 const { computeOrderTotals } = require("./orderTotals.service");
+const PaymentsService = require("./payments.service");
+// const InventoryService = require("./inventory.service");
 
 function generateOrderNumber() {
     const now = Date.now().toString().slice(-8);
@@ -73,13 +75,28 @@ function addDays(yyyyMmDd, days) {
     return `${yy}-${mm}-${dd}`;
 }
 
-function isBeforeDailyCutoffIst(date = new Date(), cutoffHour = 22, cutoffMinute = 0) {
+async function getCutoffTimeIst({ t }) {
+    const row = await Setting.findByPk("cutoff_time_ist", {
+        transaction: t,
+        lock: t?.LOCK?.UPDATE,
+    });
+
+    const hh = Number(row?.value?.hh);
+    const mm = Number(row?.value?.mm);
+
+    return {
+        hh: Number.isInteger(hh) && hh >= 0 && hh <= 23 ? hh : 23,
+        mm: Number.isInteger(mm) && mm >= 0 && mm <= 59 ? mm : 59,
+    };
+}
+
+async function isBeforeDailyCutoffIst({ t, date = new Date() }) {
     const { hour, minute } = getIstDateParts(date);
+    const cutoff = await getCutoffTimeIst({ t });
 
-    if (hour < cutoffHour) return true;
-    if (hour > cutoffHour) return false;
-
-    return minute < cutoffMinute;
+    if (hour < cutoff.hh) return true;
+    if (hour > cutoff.hh) return false;
+    return minute <= cutoff.mm;
 }
 
 function normalizePaymentMethod(input) {
@@ -274,12 +291,17 @@ function normalizePaymentMethod(input) {
 
 async function checkout({ userId, payload, idempotencyKey = null }) {
     return sequelize.transaction(async (t) => {
-        const paymentMethod = normalizePaymentMethod(payload.payment_method);
+        const paymentMethod = normalizePaymentMethod(payload?.payment_method);
         if (!paymentMethod) {
             throw new AppError("INVALID_PAYMENT_METHOD", "payment_method must be 'cod' or 'online'", 400);
         }
 
-        if (!isBeforeDailyCutoffIst()) {
+        if (!Array.isArray(payload?.items) || payload.items.length <= 0) {
+            throw new AppError("INVALID_ITEMS", "items must be a non-empty array", 400);
+        }
+
+        const beforeCutoff = await isBeforeDailyCutoffIst({ t });
+        if (!beforeCutoff) {
             throw new AppError(
                 "ORDER_CUTOFF_PASSED",
                 "Today cutoff has passed. Please place this order for the next delivery cycle from the app.",
@@ -295,6 +317,28 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
             });
 
             if (existingOrder) {
+                if (existingOrder.payment_method === "online") {
+                    const onlinePayment = await PaymentsService.createOrReuseGatewayOrderForCurrentOrder({
+                        order: existingOrder,
+                        t,
+                    });
+
+                    return {
+                        ...onlinePayment,
+                        amounts: {
+                            total_paise: existingOrder.total_paise,
+                            subtotal_paise: existingOrder.subtotal_paise,
+                            delivery_fee_paise: existingOrder.delivery_fee_paise,
+                            gst_rate_bps: existingOrder.gst_rate_bps,
+                            gst_amount_paise: existingOrder.gst_amount_paise,
+                            grand_total_paise: existingOrder.grand_total_paise,
+                        },
+                        warehouse_id: existingOrder.warehouse_id,
+                        delivery_date: existingOrder.delivery_date,
+                        idempotent: true,
+                    };
+                }
+
                 const existingPayment = await Payment.findOne({
                     where: { order_id: existingOrder.id },
                     order: [["created_at", "DESC"]],
@@ -302,19 +346,22 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
                 });
 
                 return {
-                    order: {
-                        id: existingOrder.id,
-                        status: existingOrder.status,
-                        payment_status: existingOrder.payment_status,
+                    order_id: existingOrder.id,
+                    order_status: existingOrder.status,
+                    payment_status: existingOrder.payment_status,
+                    retry_allowed: !!existingOrder.retry_allowed,
+                    refund_status: existingOrder.refund_status || "none",
+                    payment_attempt_id: existingOrder.current_payment_attempt_id || null,
+                    amounts: {
                         total_paise: existingOrder.total_paise,
                         subtotal_paise: existingOrder.subtotal_paise,
                         delivery_fee_paise: existingOrder.delivery_fee_paise,
                         gst_rate_bps: existingOrder.gst_rate_bps,
                         gst_amount_paise: existingOrder.gst_amount_paise,
                         grand_total_paise: existingOrder.grand_total_paise,
-                        warehouse_id: existingOrder.warehouse_id,
-                        delivery_date: existingOrder.delivery_date,
                     },
+                    warehouse_id: existingOrder.warehouse_id,
+                    delivery_date: existingOrder.delivery_date,
                     payment: existingPayment
                         ? {
                             id: existingPayment.id,
@@ -322,9 +369,8 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
                             method: existingPayment.method,
                             provider: existingPayment.provider || null,
                             provider_payment_id: existingPayment.provider_payment_id || null,
-                            initiation: existingPayment.provider_payload?.initiation || null,
                         }
-                        : { id: null, status: null, method: payload.payment_method || null },
+                        : { id: null, status: null, method: existingOrder.payment_method || null },
                     idempotent: true,
                 };
             }
@@ -377,7 +423,6 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
         let subtotal_paise = 0;
 
         const normalizedItems = payload.items.map((it) => {
-
             if (!it?.product_id || !it?.product_pack_id) {
                 throw new AppError("INVALID_ITEM", "Each item must include product_id and product_pack_id", 400);
             }
@@ -392,6 +437,7 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
             if (!product || !product.is_active) {
                 throw new AppError("PRODUCT_INACTIVE", "A product is not available", 400);
             }
+
             if (product.is_out_of_stock) {
                 throw new AppError("OUT_OF_STOCK", "A product is out of stock", 400);
             }
@@ -414,7 +460,13 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
             const lineTotal = Math.round(qty * unitPrice);
             subtotal_paise += lineTotal;
 
-            return { qty, unitPrice, lineTotal, product, pack };
+            return {
+                qty,
+                unitPrice,
+                lineTotal,
+                product,
+                pack,
+            };
         });
 
         const discount_paise = 0;
@@ -429,26 +481,9 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
 
         const isCod = paymentMethod === "cod";
         const initialStatus = isCod ? "placed" : "payment_pending";
-        const initialPaymentStatus = isCod ? "pending" : "pending";
+        const initialPaymentStatus = "pending";
 
-        let deliverySlotId = null;
-
-        if (payload.delivery_slot_id) {
-            const slot = await DeliverySlot.findOne({
-                where: {
-                    id: payload.delivery_slot_id,
-                    is_active: true,
-                },
-                transaction: t,
-                lock: t.LOCK.UPDATE,
-            });
-
-            if (!slot) {
-                throw new AppError("DELIVERY_SLOT_NOT_FOUND", "Delivery slot not found", 404);
-            }
-
-            deliverySlotId = slot.id;
-        }
+        const deliverySlotId = null;
 
         const order = await Order.create(
             {
@@ -472,7 +507,6 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
                 delivery_lng: address.lng ?? null,
 
                 delivery_date: deliveryDate,
-                // delivery_slot_id: null,
                 delivery_slot_id: deliverySlotId,
                 status: initialStatus,
                 payment_method: paymentMethod,
@@ -512,7 +546,10 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
                 to_status: initialStatus,
                 actor_user_id: userId,
                 note: null,
-                meta: { payment_method: paymentMethod, source: "local_cart" },
+                meta: {
+                    payment_method: paymentMethod,
+                    source: "local_cart",
+                },
             },
             { transaction: t }
         );
@@ -529,6 +566,15 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
         );
 
         if (isCod) {
+            await order.update(
+                {
+                    retry_allowed: false,
+                    refund_status: "none",
+                    current_payment_attempt_id: null,
+                },
+                { transaction: t }
+            );
+
             await Notification.create(
                 {
                     user_id: userId,
@@ -545,27 +591,46 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
                 },
                 { transaction: t }
             );
+
+            return {
+                order_id: order.id,
+                order_status: order.status,
+                payment_status: order.payment_status,
+                retry_allowed: false,
+                refund_status: "none",
+                payment_attempt_id: null,
+                amounts: {
+                    total_paise,
+                    subtotal_paise,
+                    delivery_fee_paise,
+                    gst_rate_bps,
+                    gst_amount_paise,
+                    grand_total_paise,
+                },
+                warehouse_id: order.warehouse_id,
+                delivery_date: order.delivery_date,
+                payment: {
+                    id: payment.id,
+                    status: payment.status,
+                    method: payment.method,
+                },
+            };
         }
 
+        const onlinePayment = await PaymentsService.createOrReuseGatewayOrderForCurrentOrder({ order, t });
+
         return {
-            order: {
-                id: order.id,
-                status: order.status,
-                payment_status: order.payment_status,
+            ...onlinePayment,
+            amounts: {
                 total_paise,
                 subtotal_paise,
                 delivery_fee_paise,
                 gst_rate_bps,
                 gst_amount_paise,
                 grand_total_paise,
-                warehouse_id: order.warehouse_id,
-                delivery_date: order.delivery_date,
             },
-            payment: {
-                id: payment.id,
-                status: payment.status,
-                method: payment.method,
-            },
+            warehouse_id: order.warehouse_id,
+            delivery_date: order.delivery_date,
         };
     });
 }

@@ -1,6 +1,5 @@
 "use strict";
 
-const { Op } = require("sequelize");
 const {
     sequelize,
     Order,
@@ -11,11 +10,10 @@ const {
     Warehouse,
     OrderStatusEvent,
     Notification,
-    Refund,
-    Payment,
 } = require("../models");
 const { AppError } = require("../utils/errors");
 const PaymentsService = require("../services/payments.service");
+// const InventoryService = require("../services/inventory.service");
 
 const CANCEL_ALLOWED_STATUSES = new Set(["payment_pending", "placed"]);
 
@@ -110,6 +108,18 @@ function attachAddressFallback(orderJson) {
     return applyOne(orderJson);
 }
 
+function mergePaymentSnapshot(orderJson, paymentStatus) {
+    if (!orderJson) return orderJson;
+    return {
+        ...orderJson,
+        payment_status: paymentStatus.payment_status,
+        retry_allowed: paymentStatus.retry_allowed,
+        refund_status: paymentStatus.refund_status,
+        verification_pending: paymentStatus.verification_pending,
+        latest_payment_attempt: paymentStatus.latest_payment_attempt,
+    };
+}
+
 async function listMyOrders({ userId, query }) {
     const page = query.page || 1;
     const limit = query.limit || 20;
@@ -122,7 +132,6 @@ async function listMyOrders({ userId, query }) {
         where,
         include: [
             { model: Warehouse, as: "warehouse", attributes: ["id", "name", "city", "state"], required: false },
-            // { model: UserAddress, as: "address", required: false },
             {
                 model: OrderItem,
                 as: "items",
@@ -147,7 +156,14 @@ async function listMyOrders({ userId, query }) {
     jsonOrders = attachAddressFallback(jsonOrders);
     sortProductImagesInOrderJson(jsonOrders);
 
-    return { orders: jsonOrders, page, limit, total: count };
+    const withPayment = await Promise.all(
+        jsonOrders.map(async (order) => {
+            const paymentStatus = await PaymentsService.getPaymentStatus({ userId, orderId: order.id });
+            return mergePaymentSnapshot(order, paymentStatus);
+        })
+    );
+
+    return { orders: withPayment, page, limit, total: count };
 }
 
 async function getMyOrderById({ userId, orderId }) {
@@ -155,7 +171,6 @@ async function getMyOrderById({ userId, orderId }) {
         where: { id: orderId, user_id: userId },
         include: [
             { model: Warehouse, as: "warehouse", required: false },
-            // { model: UserAddress, as: "address", required: false },
             {
                 model: OrderItem,
                 as: "items",
@@ -186,15 +201,13 @@ async function getMyOrderById({ userId, orderId }) {
     json = attachAddressFallback(json);
     sortProductImagesInOrderJson(json);
 
-    return { order: json };
+    const paymentStatus = await PaymentsService.getPaymentStatus({ userId, orderId: order.id });
+
+    return { order: mergePaymentSnapshot(json, paymentStatus) };
 }
 
 async function cancelMyOrder({ userId, orderId, reason }) {
-    let payment = null;
-    let refundRowId = null;
-    let orderSnapshot = null;
-
-    await sequelize.transaction(async (t) => {
+    const cancelled = await sequelize.transaction(async (t) => {
         const order = await Order.findOne({
             where: { id: orderId, user_id: userId },
             transaction: t,
@@ -213,90 +226,10 @@ async function cancelMyOrder({ userId, orderId, reason }) {
             throw new AppError("CANNOT_CANCEL", "Order cannot be cancelled at this stage", 400);
         }
 
-        orderSnapshot = {
-            id: order.id,
-            status: order.status,
-            user_id: order.user_id,
-            order_number: order.order_number,
-            total_paise: order.total_paise,
-            payment_method: order.payment_method,
-            payment_status: order.payment_status,
-        };
-
-        if (order.payment_method === "online" && order.payment_status === "paid") {
-            payment = await Payment.findOne({
-                where: { order_id: order.id, provider: "razorpay" },
-                order: [["created_at", "DESC"]],
-                transaction: t,
-                lock: t.LOCK.UPDATE,
-            });
-
-            const razorpayPaymentId = payment?.provider_payment_id;
-            if (!razorpayPaymentId) {
-                throw new AppError(
-                    "REFUND_NOT_POSSIBLE",
-                    "Paid order cannot be cancelled because Razorpay payment id is missing",
-                    400
-                );
-            }
-
-            const refundRow = await Refund.create(
-                {
-                    order_id: order.id,
-                    payment_id: payment.id,
-                    status: "initiated",
-                    amount_paise: order.total_paise,
-                    provider_refund_id: null,
-                    provider_payload: null,
-                },
-                { transaction: t }
-            );
-
-            refundRowId = refundRow.id;
-        }
-    });
-
-    let refundInfo = null;
-
-    if (orderSnapshot.payment_method === "online" && orderSnapshot.payment_status === "paid") {
-        const refundResp = await PaymentsService.razorpayCreateRefund({
-            razorpayPaymentId: payment.provider_payment_id,
-            amountPaise: orderSnapshot.total_paise,
-            notes: {
-                fv_order_id: String(orderSnapshot.id),
-                fv_order_number: String(orderSnapshot.order_number || ""),
-                reason: reason || undefined,
-            },
-        });
-
-        refundInfo = {
-            id: refundRowId,
-            provider_refund_id: refundResp?.id || null,
-            status: String(refundResp?.status || "initiated"),
-        };
-
-        await Refund.update(
-            {
-                provider_refund_id: refundInfo.provider_refund_id,
-                provider_payload: refundResp,
-                status: refundInfo.status === "processed" ? "succeeded" : "initiated",
-            },
-            { where: { id: refundRowId } }
-        );
-    }
-
-    await sequelize.transaction(async (t) => {
-        const order = await Order.findOne({
-            where: { id: orderSnapshot.id, user_id: userId },
-            transaction: t,
-            lock: t.LOCK.UPDATE,
-        });
-
-        if (!order) {
-            throw new AppError("ORDER_NOT_FOUND", "Order not found", 404);
-        }
-
         const fromStatus = order.status;
+        const shouldAutoRefund =
+            order.payment_method === "online" &&
+            String(order.payment_status) === "paid";
 
         await order.update(
             {
@@ -304,9 +237,15 @@ async function cancelMyOrder({ userId, orderId, reason }) {
                 is_locked: false,
                 cancelled_at: new Date(),
                 cancellation_reason: reason || null,
+                retry_allowed: false,
             },
             { transaction: t }
         );
+
+        // await InventoryService.releaseReservedInventoryForOrder({
+        //     orderId: order.id,
+        //     t,
+        // });
 
         await OrderStatusEvent.create(
             {
@@ -315,7 +254,12 @@ async function cancelMyOrder({ userId, orderId, reason }) {
                 to_status: "cancelled",
                 actor_user_id: userId,
                 note: reason || null,
-                meta: { source: "customer", refund: refundInfo },
+                meta: {
+                    source: "customer",
+                    payment_status: order.payment_status,
+                    refund_status: order.refund_status || "none",
+                    auto_refund_requested: shouldAutoRefund,
+                },
             },
             { transaction: t }
         );
@@ -325,16 +269,57 @@ async function cancelMyOrder({ userId, orderId, reason }) {
                 user_id: userId,
                 channel: "push",
                 template: "order_cancelled",
-                payload: { order_id: order.id, refund: refundInfo },
+                payload: {
+                    order_id: order.id,
+                    refund_status: order.refund_status || "none",
+                    auto_refund_requested: shouldAutoRefund,
+                },
                 status: "queued",
                 attempt_count: 0,
                 scheduled_at: null,
             },
             { transaction: t }
         );
+
+        return {
+            orderId: order.id,
+            shouldAutoRefund,
+        };
     });
 
-    return { order: { id: orderSnapshot.id, status: "cancelled" }, refund: refundInfo };
+    let refund = null;
+
+    if (cancelled.shouldAutoRefund) {
+        try {
+            refund = await PaymentsService.adminInitiateRefund({
+                actorUserId: userId,
+                orderId: cancelled.orderId,
+                reason: reason || "customer_cancelled_order",
+            });
+        } catch (e) {
+            refund = {
+                initiated: false,
+                error_code: e.code || "REFUND_INITIATION_FAILED",
+                message: e.message || "Refund initiation failed",
+            };
+        }
+    }
+
+    const paymentStatus = await PaymentsService.getPaymentStatus({
+        userId,
+        orderId: cancelled.orderId,
+    });
+
+    return {
+        order: {
+            id: cancelled.orderId,
+            status: "cancelled",
+            payment_status: paymentStatus.payment_status,
+            refund_status: paymentStatus.refund_status,
+            retry_allowed: paymentStatus.retry_allowed,
+        },
+        refund,
+    };
 }
 
 module.exports = {

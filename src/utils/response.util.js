@@ -1,5 +1,5 @@
-function ok(res, code, data = null, message = null) {
-    return res.status(200).json({
+function ok(res, code = 200, data = null, message = null) {
+    return res.status(code).json({
         success: true,
         status: code,
         data,
@@ -8,8 +8,8 @@ function ok(res, code, data = null, message = null) {
     });
 }
 
-function created(res, code, data = null, message = null) {
-    return res.status(201).json({
+function created(res, code = 201, data = null, message = null) {
+    return res.status(code).json({
         success: true,
         status: code,
         data,
