@@ -36,6 +36,12 @@ const adminUsersRoutes = require("./routes/admin/users.admin.routes");
 const adminDashboardRoutes = require("./routes/admin/dashboard.admin.routes");
 const adminOrdersRoutes = require("./routes/admin/orders.admin.routes");
 
+const adminCostRoutes = require("./routes/admin/cost.routes");
+
+const deliveryOrdersRoutes = require("./routes/delivery/orders.delivery.routes");
+
+const internalJobsRoutes = require("./routes/internal/jobs.internal.routes");
+
 const { env } = require("./config/env");
 const { ensureDir, getUploadsRoot } = require("./utils/uploads");
 const { notFound, errorHandler } = require("./middlewares/error.middleware");
@@ -107,6 +113,7 @@ app.use("/v1/devices", devicesRoutes);
 
 // ✅ Admin (move admin delivery slots under /v1/admin/deliveryslot)
 app.use("/v1/admin/product", adminProductRoutes);
+app.use("/v1/admin/cost", adminCostRoutes);
 app.use("/v1/admin/deliveryslot", adminDeliverySlots);
 app.use("/v1/adminSetting", adminSetting);
 app.use("/v1/adminWarehouse", adminWarehouse);
@@ -125,6 +132,10 @@ app.use("/v1/ops/reports", opsReportsRoutes);
 app.use("/v1/ops/jobs", opsJobsRoutes);
 app.use("/v1/ops/scheduler", opsSchedulerRoutes);
 app.use("/v1/ops/categories", opsCategoryRoutes);
+
+app.use("/v1/delivery/orders", deliveryOrdersRoutes);
+
+app.use("/v1/internal/jobs", internalJobsRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

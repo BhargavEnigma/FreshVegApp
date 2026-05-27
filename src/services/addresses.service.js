@@ -3,6 +3,7 @@
 const { Op } = require("sequelize");
 const { AppError } = require("../utils/errors");
 const { sequelize, UserAddress, Setting, Order } = require("../models");
+const { assertAddressServiceable } = require("./warehouseServiceAreas.service");
 
 const ACTIVE_ORDER_STATUSES = [
     "payment_pending",
@@ -27,7 +28,7 @@ async function getDefaultLocationFromSettings({ t }) {
     ]);
 
     console.log("citySetting : ", citySetting?.value?.name, " stateSetting : ", stateSetting?.value?.name);
-    
+
     const city =
         citySetting?.value?.name ||
         citySetting?.value?.city ||
@@ -68,6 +69,7 @@ async function list({ userId }) {
             lat: a.lat ?? null,
             lng: a.lng ?? null,
             is_default: !!a.is_default,
+            is_serviceable: !!a.is_serviceable,
             created_at: a.created_at,
             updated_at: a.updated_at,
         })),
@@ -95,6 +97,18 @@ async function create({ userId, payload }) {
                 500
             );
         }
+
+        const serviceability = await assertAddressServiceable({
+            address: {
+                area: payload.area,
+                city: finalCity,
+                state: finalState,
+                pincode: payload.pincode,
+                lat: payload.lat ?? null,
+                lng: payload.lng ?? null,
+            },
+            t,
+        });
 
         if (shouldBeDefault) {
             await UserAddress.findAll({
@@ -125,16 +139,38 @@ async function create({ userId, payload }) {
                 lat: payload.lat ?? null,
                 lng: payload.lng ?? null,
                 is_default: shouldBeDefault,
+                is_serviceable: !!serviceability,
             },
             { transaction: t }
         );
 
-        return {
-            address: {
-                id: row.id,
-                is_default: !!row.is_default,
-            },
-        };
+        if (!serviceability) {
+
+            return {
+                address: {
+                    id: row.id,
+                    is_default: !!row.is_default,
+                    is_serviceable: false,
+                    warehouse_id: serviceability?.warehouse?.id ?? null,
+                    service_area_id: serviceability?.service_area?.id ?? null,
+                },
+                message: "Address added successfully, but delivery is not available at this address yet.",
+            };
+
+        } else {
+
+            return {
+                address: {
+                    id: row.id,
+                    is_default: !!row.is_default,
+                    is_serviceable: !!row.is_serviceable,
+                    warehouse_id: serviceability?.warehouse?.id ?? null,
+                    service_area_id: serviceability?.service_area?.id ?? null,
+                },
+                message: "Address added successfully. Delivery is available at this address.",
+            }
+
+        }
     });
 }
 
@@ -174,6 +210,20 @@ async function update({ userId, addressId, payload }) {
             state = state ?? defaults.state;
         }
 
+        const nextAddress = {
+            area: payload.area ?? row.area,
+            city,
+            state,
+            pincode: payload.pincode ?? row.pincode,
+            lat: payload.lat ?? row.lat,
+            lng: payload.lng ?? row.lng,
+        };
+
+        const serviceability = await assertAddressServiceable({
+            address: nextAddress,
+            t,
+        });
+
         await row.update(
             {
                 label: payload.label ?? row.label,
@@ -189,17 +239,38 @@ async function update({ userId, addressId, payload }) {
                 lat: payload.lat ?? row.lat,
                 lng: payload.lng ?? row.lng,
                 is_default: wantsDefault ? true : row.is_default,
+                is_serviceable: !!serviceability,
             },
             { transaction: t }
         );
 
-        return {
-            address: {
-                id: row.id,
-                is_default: !!row.is_default,
-                updated_at: row.updated_at,
-            },
-        };
+        if (!serviceability) {
+
+            return {
+                address: {
+                    id: row.id,
+                    is_default: !!row.is_default,
+                    is_serviceable: !!row.is_serviceable,
+                    warehouse_id: serviceability?.warehouse?.id ?? null,
+                    service_area_id: serviceability?.service_area?.id ?? null,
+                },
+                message: "Address updated successfully, but delivery is not available at this address yet.",
+            };
+
+        } else {
+
+            return {
+                address: {
+                    id: row.id,
+                    is_default: !!row.is_default,
+                    is_serviceable: !!row.is_serviceable,
+                    warehouse_id: serviceability?.warehouse?.id ?? null,
+                    service_area_id: serviceability?.service_area?.id ?? null,
+                },
+                message: "Address Updated successfully.",
+            }
+
+        }
     });
 }
 

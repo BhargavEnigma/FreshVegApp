@@ -4,6 +4,21 @@ const { sequelize, User, UserRole, UserWarehouseAssignment } = require("../../mo
 const { Op } = require("sequelize");
 const { AppError } = require("../../utils/errors");
 
+function assertWarehouseScopedInternalUser({ roles, warehouseIds }) {
+    const normalizedRoles = (roles || []).map((x) => String(x).trim());
+    const requiresWarehouse = normalizedRoles.some((role) =>
+        ["warehouse_manager", "delivery_partner"].includes(role)
+    );
+
+    if (requiresWarehouse && !(warehouseIds || []).length) {
+        throw new AppError(
+            "WAREHOUSE_REQUIRED",
+            "warehouse_ids is required for warehouse_manager and delivery_partner users",
+            400
+        );
+    }
+}
+
 async function syncWarehouseAssignments({ userId, warehouseIds = [], transaction }) {
     const normalized = Array.from(new Set((warehouseIds || []).map(String)));
 
@@ -36,6 +51,11 @@ async function createUserWithRoles({ payload }) {
     return sequelize.transaction(async (t) => {
         const phone = String(payload.phone).trim();
         const roles = payload.roles.map((r) => String(r).trim());
+
+        assertWarehouseScopedInternalUser({
+            roles,
+            warehouseIds: payload.warehouse_ids || [],
+        });
 
         const [user] = await User.findOrCreate({
             where: { phone },
@@ -109,6 +129,11 @@ async function setUserRoles({ userId, roles, warehouseIds = [] }) {
         }
 
         const normalized = roles.map((r) => String(r).trim());
+
+        assertWarehouseScopedInternalUser({
+            roles: normalized,
+            warehouseIds,
+        });
 
         await UserRole.destroy({
             where: {

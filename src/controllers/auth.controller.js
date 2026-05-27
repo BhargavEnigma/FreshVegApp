@@ -29,16 +29,20 @@ async function sendOtp(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        console.log('SEND ERROR : ', e);
+        console.log('E : ', e);
+        console.error("AUTH_ERROR", {
+            code: e?.code || e?.name || "UNKNOWN",
+            message: e?.message || "Auth error",
+        });
 
         // ✅ AppError path (your services throw this)
         if (e instanceof AppError) {
             return ResponseUtil.fail(
                 res,
-                e.httpStatus || 500,
-                e.code || "PROVIDER_ERROR",
-                e.message || "Something went wrong",
-                e.details || e?.response?.data || null
+                500,
+                "PROVIDER_ERROR",
+                "Unable to send OTP. Please try again.",
+                null
             );
         }
 
@@ -69,10 +73,19 @@ async function verifyOtp(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        console.log('ERROR OTP VERIFY : ', e);
+        console.error("AUTH_ERROR", {
+            code: e?.code || e?.name || "UNKNOWN",
+            message: e?.message || "Auth error",
+        });
 
         if (e instanceof AppError) {
-            return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
+            return ResponseUtil.fail(
+                res,
+                500,
+                "PROVIDER_ERROR",
+                "Unable to verify OTP. Please try again.",
+                null
+            );
         }
 
         if (e?.name === "ZodError") {
@@ -97,7 +110,7 @@ async function refreshToken(req, res) {
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
         console.log('ERROR REFRESH TOKEN : ', e);
-        
+
         if (e instanceof AppError) {
             return ResponseUtil.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
         }

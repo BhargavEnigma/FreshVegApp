@@ -39,7 +39,7 @@ async function createOrGetJobRun({ job_name, run_key, scheduled_for, trigger_sou
         if (e instanceof UniqueConstraintError) {
             const existing = await JobRun.findOne({ where: { job_name, run_key } });
 
-            if (isStaleStartedRun(existing)) {
+            if (isStaleStartedRun(existing)) {  
                 await existing.update({
                     status: "failed",
                     finished_at: new Date(),

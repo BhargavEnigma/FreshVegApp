@@ -17,6 +17,7 @@ const {
 const { AppError } = require("../utils/errors");
 const { computeOrderTotals } = require("./orderTotals.service");
 const PaymentsService = require("./payments.service");
+const { findServiceableWarehouseForAddress } = require("./warehouseServiceAreas.service");
 // const InventoryService = require("./inventory.service");
 
 function generateOrderNumber() {
@@ -389,7 +390,20 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
             throw new AppError("ADDRESS_NOT_FOUND", "Address not found", 404);
         }
 
-        const warehouseId = await getDefaultWarehouseId({ t });
+        const serviceability = await findServiceableWarehouseForAddress({
+            address,
+            t,
+        });
+
+        if (!serviceability) {
+            throw new AppError(
+                "AREA_NOT_SERVICEABLE",
+                "Sorry, delivery is not available at this address yet.",
+                400
+            );
+        }
+
+        const warehouseId = serviceability.warehouse.id;
 
         const groupedItemsMap = new Map();
 

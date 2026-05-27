@@ -53,6 +53,19 @@ function buildPushFromTemplate(notificationRow) {
         };
     }
 
+    if (template === "delivery_assigned") {
+        return {
+            title: "New delivery assigned",
+            body: `Order ${payload.order_number || ""} is assigned for ${payload.delivery_date || "today"}.`,
+            data: {
+                type: "delivery_assigned",
+                order_id: String(payload.order_id),
+                order_number: String(payload.order_number || ""),
+                delivery_date: String(payload.delivery_date || ""),
+            },
+        };
+    }
+
     return {
         title: "FreshVeg",
         body: "You have a new update.",

@@ -6,6 +6,7 @@ const fs = require("fs");
 const StorageService = require("../storage.service");
 const crypto = require("crypto");
 const { calculatePackPricesFromProduct } = require("../pricing.service");
+const { Op } = require("sequelize");
 
 async function syncDynamicPacksForProduct({ product, t }) {
     const packs = await ProductPack.findAll({

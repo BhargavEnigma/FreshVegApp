@@ -45,15 +45,15 @@ function assertSupportedUnit(unit, label) {
 
 function canConvert(productUnit, packUnit) {
     if (productUnit === packUnit) return true;
-    const weight = new Set(["g", "kg"]);
-    if (weight.has(productUnit) && weight.has(packUnit)) return true;
-    return false;
+
+    const weightUnits = new Set(["g", "kg"]);
+
+    return weightUnits.has(productUnit) && weightUnits.has(packUnit);
 }
 
 function convertQuantityToUnit(qty, fromUnit, toUnit) {
     if (fromUnit === toUnit) return qty;
 
-    // Weight conversions
     if (fromUnit === "kg" && toUnit === "g") return qty * 1000;
     if (fromUnit === "g" && toUnit === "kg") return qty / 1000;
 

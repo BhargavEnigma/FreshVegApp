@@ -55,13 +55,14 @@ const env = {
         // these should NOT be required in production
         bypassEnabled: parseBool(process.env.OTP_BYPASS_ENABLED, false),
         bypassCode: String(process.env.OTP_BYPASS_CODE || "1234").trim(),
-    }
-    ,
+    },
 
     // Optional: used to build absolute URLs for uploaded assets.
     // Example: https://freshvegapp.onrender.com
     publicBaseUrl: (process.env.PUBLIC_BASE_URL || "").trim(),
 
+    internalJobSecret: (process.env.INTERNAL_JOB_SECRET || "").trim(),
+    
     // Optional: where to store uploads on disk (relative to project root)
     uploadsDir: (process.env.UPLOADS_DIR || "uploads").trim(),
 

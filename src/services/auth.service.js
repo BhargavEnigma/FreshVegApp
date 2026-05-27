@@ -32,7 +32,7 @@ function normalizePhone(phone) {
 }
 
 async function enforceOtpRateLimit({ phone, purpose, ipAddress }) {
-    const since = new Date(Date.now() - 15 * 60 * 1000);
+    const since = new Date(Date.now() - 60 * 1000);
 
     const where = {
         purpose,
@@ -60,10 +60,17 @@ async function sendOtp({ phone, purpose, ipAddress, userAgent }) {
 
     let providerResp;
     try {
-        providerResp = await sendOtpViaMsg91({
-            phone: normalizedPhone,
-            otpExpiryMinutes: env.otp.msg91OTPexpiryMinutes,
-        });
+        if (env.otp?.bypassEnabled) {
+            providerResp = {
+                opt_request_id: `dev_${Date.now()}`,
+                expires_in_seconds: Number(env.otp.msg91OTPexpiryMinutes || 5) * 60,
+            };
+        } else {
+            providerResp = await sendOtpViaMsg91({
+                phone: normalizedPhone,
+                otpExpiryMinutes: env.otp.msg91OTPexpiryMinutes,
+            });
+        }
     } catch (error) {
         await OtpRequest.create({
             phone: normalizedPhone,
@@ -105,46 +112,81 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
     const bypassCode = String(env?.otp?.bypassCode || "").trim();
     const isBypassOtp = bypassEnabled && providedOtp === bypassCode;
 
+    const otpReq = await OtpRequest.findOne({
+        where: {
+            id: otp_request_id,
+            phone: normalizedPhone,
+            purpose: "login",
+        },
+    });
+
+    if (!otpReq) {
+        throw new AppError("OTP_REQUEST_NOT_FOUND", "OTP request not found", 404);
+    }
+
+    if (otpReq.status === "verified") {
+        throw new AppError("OTP_ALREADY_USED", "OTP already used", 400);
+    }
+
+    if (otpReq.status === "expired") {
+        throw new AppError("OTP_EXPIRED", "OTP expired", 400);
+    }
+
+    if (otpReq.status === "failed") {
+        throw new AppError("INVALID_OTP", "Too many attempts. Please request a new OTP.", 400);
+    }
+
+    if (otpReq.expires_at && new Date(otpReq.expires_at).getTime() < Date.now()) {
+        await otpReq.update({ status: "expired" });
+        throw new AppError("OTP_EXPIRED", "OTP expired", 400);
+    }
+
+    if (Number(otpReq.attempt_count || 0) >= 5) {
+        await otpReq.update({ status: "failed" });
+        throw new AppError("INVALID_OTP", "Too many attempts. Please request a new OTP.", 400);
+    }
+
+    await otpReq.update({
+        attempt_count: Number(otpReq.attempt_count || 0) + 1,
+        ip_address: ipAddress || otpReq.ip_address,
+        user_agent: userAgent || otpReq.user_agent,
+    });
+
+    try {
+        if (!isBypassOtp) {
+            await verifyOtpViaMsg91({
+                phone: normalizedPhone,
+                otp: providedOtp,
+                otpExpiryMinutes: env.otp.msg91OTPexpiryMinutes,
+            });
+        }
+    } catch (error) {
+        const freshOtpReq = await OtpRequest.findByPk(otpReq.id);
+
+        if (Number(freshOtpReq?.attempt_count || 0) >= 5) {
+            await freshOtpReq.update({ status: "failed" });
+        }
+
+        if (error instanceof AppError && error.code === "INVALID_OTP") {
+            throw new AppError("INVALID_OTP", "Invalid OTP", 400);
+        }
+
+        throw error;
+    }
+
     return sequelize.transaction(async (t) => {
-        const otpReq = await OtpRequest.findOne({
-            where: { id: otp_request_id, phone: normalizedPhone, purpose: "login" },
+        const lockedOtpReq = await OtpRequest.findOne({
+            where: {
+                id: otp_request_id,
+                phone: normalizedPhone,
+                purpose: "login",
+            },
             transaction: t,
             lock: t.LOCK.UPDATE,
         });
 
-        if (!otpReq) {
-            throw new AppError("OTP_REQUEST_NOT_FOUND", "OTP request not found", 404);
-        }
-
-        if (otpReq.status === "verified") {
-            throw new AppError("OTP_ALREADY_USED", "OTP already used", 400);
-        }
-
-        if (otpReq.status === "expired") {
-            throw new AppError("OTP_EXPIRED", "OTP expired", 400);
-        }
-
-        if (otpReq.expires_at && new Date(otpReq.expires_at).getTime() < Date.now()) {
-            await otpReq.update({ status: "expired" }, { transaction: t });
-            throw new AppError("OTP_EXPIRED", "OTP expired", 400);
-        }
-
-        if (otpReq.attempt_count >= 5) {
-            await otpReq.update({ status: "failed" }, { transaction: t });
-            throw new AppError("INVALID_OTP", "Too many attempts", 400);
-        }
-
-        await otpReq.update(
-            {
-                attempt_count: Number(otpReq.attempt_count || 0) + 1,
-                ip_address: ipAddress || otpReq.ip_address,
-                user_agent: userAgent || otpReq.user_agent,
-            },
-            { transaction: t }
-        );
-
-        if (!isBypassOtp) {
-            await verifyOtpViaMsg91({ phone: normalizedPhone, otp: providedOtp });
+        if (!lockedOtpReq || lockedOtpReq.status !== "sent") {
+            throw new AppError("OTP_ALREADY_USED", "OTP already used or invalid", 400);
         }
 
         let user = await User.findOne({
@@ -169,6 +211,7 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
             }
 
             const updatePayload = { last_login_at: new Date() };
+
             if (fcm_token !== undefined) {
                 updatePayload.fcm_token = fcm_token;
             }
@@ -186,7 +229,6 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
                 where: { user_id: user.id, role: "customer" },
                 defaults: { user_id: user.id, role: "customer" },
                 transaction: t,
-                lock: t.LOCK.UPDATE,
             });
         }
 
@@ -196,14 +238,20 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
             transaction: t,
         });
 
-        const accessToken = createAccessToken({ userId: user.id, phone: user.phone });
-        const refreshToken = createRefreshToken({ userId: user.id, phone: user.phone });
-        const refreshHash = hashRefreshToken(refreshToken);
+        const accessToken = createAccessToken({
+            userId: user.id,
+            phone: user.phone,
+        });
+
+        const refreshToken = createRefreshToken({
+            userId: user.id,
+            phone: user.phone,
+        });
 
         await UserSession.create(
             {
                 user_id: user.id,
-                refresh_token_hash: refreshHash,
+                refresh_token_hash: hashRefreshToken(refreshToken),
                 device_id: device?.device_id || null,
                 device_name: device?.device_name || null,
                 ip_address: ipAddress || null,
@@ -215,7 +263,12 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
             { transaction: t }
         );
 
-        await otpReq.update({ status: "verified" }, { transaction: t });
+        await lockedOtpReq.update(
+            {
+                status: "verified",
+            },
+            { transaction: t }
+        );
 
         return {
             user: {

@@ -28,6 +28,61 @@ module.exports = (sequelize, DataTypes) => {
                 allowNull: true,
             },
 
+            delivery_partner_user_id: {
+                type: DataTypes.UUID,
+                allowNull: true,
+            },
+            delivery_assigned_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
+            delivery_assigned_by_user_id: {
+                type: DataTypes.UUID,
+                allowNull: true,
+            },
+            picked_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
+            out_for_delivery_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
+            delivered_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
+            delivery_failed_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
+            delivery_attempt_count: {
+                type: DataTypes.INTEGER,
+                allowNull: false,
+                defaultValue: 0,
+                validate: { min: 0 },
+            },
+            delivery_failure_reason: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            delivery_notes: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            delivery_proof_image_url: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            customer_delivery_otp_hash: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            customer_delivery_otp_expires_at: {
+                type: DataTypes.DATE,
+                allowNull: true,
+            },
+
             // frozen delivery snapshot
             delivery_label: {
                 type: DataTypes.TEXT,
@@ -100,6 +155,7 @@ module.exports = (sequelize, DataTypes) => {
                         "packed",
                         "out_for_delivery",
                         "delivered",
+                        "delivery_failed",
                         "cancelled",
                         "refunded",
                     ]],
@@ -204,6 +260,11 @@ module.exports = (sequelize, DataTypes) => {
                 { name: "orders_delivery_date_idx", fields: ["delivery_date"] },
                 { name: "orders_locked_idx", fields: ["is_locked"] },
                 { name: "orders_user_idempotency_key_uniq", fields: ["user_id", "idempotency_key"], unique: true },
+                { name: "orders_delivery_partner_idx", fields: ["delivery_partner_user_id"] },
+                {
+                    name: "orders_wh_delivery_partner_delivery_date_idx",
+                    fields: ["warehouse_id", "delivery_partner_user_id", "delivery_date"],
+                },
             ],
         }
     );
@@ -221,6 +282,8 @@ module.exports = (sequelize, DataTypes) => {
         Order.belongsTo(db.PaymentAttempt, { foreignKey: "current_payment_attempt_id", as: "current_payment_attempt" });
         Order.hasMany(db.Refund, { foreignKey: "order_id", as: "refunds" });
         Order.hasMany(db.OrderStatusEvent, { foreignKey: "order_id", as: "status_events" });
+        Order.belongsTo(db.User, { foreignKey: "delivery_partner_user_id", as: "delivery_partner" });
+        Order.belongsTo(db.User, { foreignKey: "delivery_assigned_by_user_id", as: "delivery_assigned_by" });
     };
 
     return Order;
