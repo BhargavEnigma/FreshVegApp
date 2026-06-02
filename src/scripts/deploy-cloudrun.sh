@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
 set -e
 
-if [ ! -f ".env.cloudrun" ]; then
-    echo "Missing .env.cloudrun"
-    echo "Create it using: cp .env.cloudrun.example .env.cloudrun"
+if [ -f ".env.cloudrun" ]; then
+    set -a
+    source .env.cloudrun
+    set +a
+fi
+
+PROJECT_ID="${GCP_PROJECT_ID:-${PROJECT_ID:-}}"
+REGION="${GCP_REGION:-${REGION:-}}"
+SERVICE_NAME="${CLOUD_RUN_SERVICE:-${SERVICE_NAME:-}}"
+
+if [ -z "$PROJECT_ID" ] || [ -z "$REGION" ] || [ -z "$SERVICE_NAME" ]; then
+    echo "Missing Cloud Run deployment configuration."
+    echo "Set GCP_PROJECT_ID, GCP_REGION, and CLOUD_RUN_SERVICE"
+    echo "or provide PROJECT_ID, REGION, and SERVICE_NAME via .env.cloudrun."
     exit 1
 fi
 
-set -a
-source .env.cloudrun
-set +a
-
 gcloud config set project "$PROJECT_ID"
-
-gcloud services enable \
-    run.googleapis.com \
-    cloudbuild.googleapis.com \
-    artifactregistry.googleapis.com \
-    secretmanager.googleapis.com \
-    cloudscheduler.googleapis.com
 
 gcloud run deploy "$SERVICE_NAME" \
     --source . \
