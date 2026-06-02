@@ -436,7 +436,7 @@ async function checkout({ userId, payload, idempotencyKey = null }) {
         const packMap = new Map(packs.map((p) => [p.id, p]));
         let subtotal_paise = 0;
 
-        const normalizedItems = payload.items.map((it) => {
+        const normalizedItems = groupedItems.map((it) => {
             if (!it?.product_id || !it?.product_pack_id) {
                 throw new AppError("INVALID_ITEM", "Each item must include product_id and product_pack_id", 400);
             }
