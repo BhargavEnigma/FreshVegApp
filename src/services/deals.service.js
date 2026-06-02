@@ -47,94 +47,73 @@ function computeDealUnitPrice({ basePricePaise, dealItem }) {
     return base;
 }
 
-async function getActiveDealForDate({ date, now = new Date() }) {
+async function getActiveDealsForDate({ date, now = new Date() }) {
     const yyyyMmDd = date || getIstYyyyMmDd();
 
-    const deal = await Deal.findOne({
+    const deals = await Deal.findAll({
         where: {
             deal_date: yyyyMmDd,
             is_active: true,
             [Op.and]: [
-                { [Op.or]: [{ starts_at: null }, { starts_at: { [Op.lte]: now } }] },
-                { [Op.or]: [{ ends_at: null }, { ends_at: { [Op.gte]: now } }] },
+                {
+                    [Op.or]: [
+                        { starts_at: null },
+                        { starts_at: { [Op.lte]: now } },
+                    ],
+                },
+                {
+                    [Op.or]: [
+                        { ends_at: null },
+                        { ends_at: { [Op.gte]: now } },
+                    ],
+                },
             ],
         },
         order: [
             ["priority", "DESC"],
             ["created_at", "DESC"],
+            [{ model: DealItem, as: "items" }, "sort_order", "ASC"],
+            [{ model: DealItem, as: "items" }, "created_at", "ASC"],
         ],
-    });
-
-    if (!deal) return { deal: null, items: [] };
-
-    const items = await DealItem.findAll({
-        where: { deal_id: deal.id, is_active: true },
         include: [
             {
-                model: ProductPack,
-                as: "pack",
-                required: true,
+                model: DealItem,
+                as: "items",
                 where: { is_active: true },
-                include: [{ model: Product, as: "product", required: true, where: { is_active: true } }],
+                required: false,
+                include: [
+                    {
+                        model: ProductPack,
+                        as: "pack",
+                        required: true,
+                        where: { is_active: true },
+                        include: [
+                            {
+                                model: Product,
+                                as: "product",
+                                required: true,
+                                where: { is_active: true },
+                            },
+                        ],
+                    },
+                ],
             },
-        ],
-        order: [
-            ["sort_order", "ASC"], ["created_at", "ASC"],
         ],
     });
 
-    return { deal, items };
+    return { deals };
 }
 
 async function getToday({ date = null }) {
     try {
-        const { deal, items } = await getActiveDealForDate({ date });
+        const { deals } = await getActiveDealsForDate({ date });
 
-        if (!deal) {
-            return { deal: null, items: [] };
+        if (!deals || deals.length === 0) {
+            return { deals: [] };
         }
 
-        const mapped = items.map((row) => {
-            const pack = row.pack;
-            const product = pack?.product;
-            const base_price_paise = Number(pack?.selling_price_paise ?? 0);
-            const deal_price_paise = computeDealUnitPrice({ basePricePaise: base_price_paise, dealItem: row });
-            const discount_paise = Math.max(0, base_price_paise - deal_price_paise);
-
-            return {
-                id: row.id,
-                deal_id: row.deal_id,
-                product_pack_id: row.product_pack_id,
-                pricing_type: row.pricing_type,
-                deal_price_paise: row.deal_price_paise,
-                discount_bps: row.discount_bps,
-                discount_paise: row.discount_paise,
-                max_qty_per_order: row.max_qty_per_order,
-                sort_order: row.sort_order,
-                is_active: row.is_active,
-
-                base_price_paise,
-                effective_price_paise: deal_price_paise,
-                effective_discount_paise: discount_paise,
-
-                pack: {
-                    id: pack?.id,
-                    label: pack?.label,
-                    base_quantity: pack?.base_quantity,
-                    base_unit: pack?.base_unit,
-                },
-                product: {
-                    id: product?.id,
-                    name: product?.name,
-                    slug: product?.slug,
-                    image_url: product?.image_url,
-                    unit: product?.unit,
-                },
-            };
-        });
-
         return {
-            deal: {
+            deals: deals.map((deal) => ({
                 id: deal.id,
                 name: deal.name,
                 description: deal.description,
@@ -143,8 +122,53 @@ async function getToday({ date = null }) {
                 ends_at: deal.ends_at,
                 is_active: deal.is_active,
                 priority: deal.priority,
-            },
-            items: mapped,
+
+                items: (deal.items || []).map((row) => {
+                    const pack = row.pack;
+                    const product = pack?.product;
+
+                    const base_price_paise = Number(pack?.selling_price_paise ?? 0);
+
+                    const deal_price_paise = computeDealUnitPrice({
+                        basePricePaise: base_price_paise,
+                        dealItem: row,
+                    });
+
+                    const discount_paise = Math.max(0, base_price_paise - deal_price_paise);
+
+                    return {
+                        id: row.id,
+                        deal_id: row.deal_id,
+                        product_pack_id: row.product_pack_id,
+                        pricing_type: row.pricing_type,
+                        deal_price_paise: row.deal_price_paise,
+                        discount_bps: row.discount_bps,
+                        discount_paise: row.discount_paise,
+                        max_qty_per_order: row.max_qty_per_order,
+                        sort_order: row.sort_order,
+                        is_active: row.is_active,
+
+                        base_price_paise,
+                        effective_price_paise: deal_price_paise,
+                        effective_discount_paise: discount_paise,
+
+                        pack: {
+                            id: pack?.id,
+                            label: pack?.label,
+                            base_quantity: pack?.base_quantity,
+                            base_unit: pack?.base_unit,
+                        },
+
+                        product: {
+                            id: product?.id,
+                            name: product?.name,
+                            slug: product?.slug,
+                            image_url: product?.image_url,
+                            unit: product?.unit,
+                        },
+                    };
+                }),
+            })),
         };
     } catch (e) {
         console.log("DEALS SERVICE ERROR:", e);
@@ -154,6 +178,6 @@ async function getToday({ date = null }) {
 
 module.exports = {
     getToday,
-    getActiveDealForDate,
+    getActiveDealsForDate,
     computeDealUnitPrice,
 };

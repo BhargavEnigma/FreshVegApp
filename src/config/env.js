@@ -62,7 +62,7 @@ const env = {
     publicBaseUrl: (process.env.PUBLIC_BASE_URL || "").trim(),
 
     internalJobSecret: (process.env.INTERNAL_JOB_SECRET || "").trim(),
-    
+
     // Optional: where to store uploads on disk (relative to project root)
     uploadsDir: (process.env.UPLOADS_DIR || "uploads").trim(),
 
@@ -78,5 +78,35 @@ const env = {
     },
 
 };
+
+function validateProductionEnv() {
+    if (env.nodeEnv !== "production") {
+        return;
+    }
+
+    if (env.otp.bypassEnabled) {
+        throw new Error("OTP_BYPASS_ENABLED must be false in production");
+    }
+
+    if (!env.corsOrigins.length) {
+        throw new Error("CORS_ORIGINS must be configured in production");
+    }
+
+    if (env.storageProvider === "local") {
+        throw new Error("STORAGE_PROVIDER=local is not safe for Cloud Run production. Use supabase.");
+    }
+
+    if (env.storageProvider === "supabase") {
+        if (!env.supabase.url) {
+            throw new Error("SUPABASE_URL is required when STORAGE_PROVIDER=supabase");
+        }
+
+        if (!env.supabase.serviceRoleKey) {
+            throw new Error("SUPABASE_SERVICE_ROLE_KEY is required when STORAGE_PROVIDER=supabase");
+        }
+    }
+}
+
+validateProductionEnv();
 
 module.exports = { env };

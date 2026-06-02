@@ -8,12 +8,20 @@ function getFirebaseApp() {
     if (firebaseApp) return firebaseApp;
 
     const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-    if (!json) return null;
+
+    if (!json) {
+        if (process.env.NODE_ENV === "production") {
+            console.error("[firebase] FIREBASE_SERVICE_ACCOUNT_JSON is missing");
+        }
+        return null;
+    }
 
     let serviceAccount;
+
     try {
         serviceAccount = JSON.parse(json);
     } catch (e) {
+        console.error("[firebase] Invalid FIREBASE_SERVICE_ACCOUNT_JSON", e);
         return null;
     }
 
