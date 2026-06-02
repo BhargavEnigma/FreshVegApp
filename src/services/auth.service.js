@@ -108,7 +108,7 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
     const normalizedPhone = normalizePhone(phone);
     const providedOtp = String(otp || "").trim();
 
-    const bypassEnabled = env.nodeEnv !== "production" && env?.otp?.bypassEnabled === true;
+    const bypassEnabled = env?.otp?.bypassEnabled === true;
     const bypassCode = String(env?.otp?.bypassCode || "").trim();
     const isBypassOtp = bypassEnabled && providedOtp === bypassCode;
 
