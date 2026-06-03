@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "fresca-f3184"
+    "dev": "dailyvegdev",
+    "prod": "fresca-f3184"
   }
 }

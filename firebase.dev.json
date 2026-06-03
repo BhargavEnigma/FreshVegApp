@@ -1,16 +1,12 @@
 {
     "hosting": {
         "public": "public",
-        "ignore": [
-            "firebase.json",
-            "**/.*",
-            "**/node_modules/**"
-        ],
+        "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
         "rewrites": [
             {
                 "source": "**",
                 "run": {
-                    "serviceId": "dailyveg-backend",
+                    "serviceId": "freshveg-backend-dev",
                     "region": "asia-south1"
                 }
             }

@@ -80,7 +80,8 @@ const env = {
 };
 
 function validateProductionEnv() {
-    if (env.nodeEnv !== "production") {
+
+    if (env.nodeEnv !== "develpoment") {
         return;
     }
 

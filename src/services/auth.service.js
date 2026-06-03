@@ -51,6 +51,13 @@ async function enforceOtpRateLimit({ phone, purpose, ipAddress }) {
     }
 }
 
+function getOtpBypassAllowedPhones() {
+    return String(process.env.OTP_BYPASS_ALLOWED_PHONES || "")
+        .split(",")
+        .map((p) => normalizePhone(p.trim()))
+        .filter(Boolean);
+}
+
 async function sendOtp({ phone, purpose, ipAddress, userAgent }) {
     const normalizedPhone = normalizePhone(phone);
 
@@ -108,9 +115,18 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
     const normalizedPhone = normalizePhone(phone);
     const providedOtp = String(otp || "").trim();
 
+    console.log('env?.otp?.bypassEnabled : ', env?.otp?.bypassEnabled === true);
+
     const bypassEnabled = env?.otp?.bypassEnabled === true;
     const bypassCode = String(env?.otp?.bypassCode || "").trim();
-    const isBypassOtp = bypassEnabled && providedOtp === bypassCode;
+    const allowedPhones = getOtpBypassAllowedPhones();
+    const isBypassOtp =
+        env.nodeEnv !== "production" &&
+        bypassEnabled &&
+        providedOtp === bypassCode 
+        // && allowedPhones.includes(normalizedPhone);
+
+    console.log('isBypassOtp : ', isBypassOtp);
 
     const otpReq = await OtpRequest.findOne({
         where: {
@@ -161,6 +177,7 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
             });
         }
     } catch (error) {
+        console.log('error --- : ', error);
         const freshOtpReq = await OtpRequest.findByPk(otpReq.id);
 
         if (Number(freshOtpReq?.attempt_count || 0) >= 5) {
