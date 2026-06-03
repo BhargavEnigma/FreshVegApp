@@ -17,12 +17,12 @@ module.exports = (sequelize, DataTypes) => {
             method: {
                 type: DataTypes.TEXT,
                 allowNull: false,
-                validate: { isIn: [["cod", "upi"]] },
+                validate: { isIn: [["cod", "online"]] },
             },
             status: {
                 type: DataTypes.TEXT,
                 allowNull: false,
-                validate: { isIn: [["pending", "paid", "failed", "refunded"]] },
+                validate: { isIn: [["pending", "provider_order_created", "verification_pending", "paid", "failed", "refund_pending", "refunded", "refund_failed"]] },
             },
             amount_paise: {
                 type: DataTypes.INTEGER,
@@ -34,6 +34,16 @@ module.exports = (sequelize, DataTypes) => {
                 allowNull: true,
             },
             provider_payment_id: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+            provider_order_id: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            },
+
+            // Razorpay webhook event id (optional, for idempotency)
+            provider_event_id: {
                 type: DataTypes.TEXT,
                 allowNull: true,
             },
@@ -51,6 +61,24 @@ module.exports = (sequelize, DataTypes) => {
             indexes: [
                 { name: "payments_order_idx", fields: ["order_id"] },
                 { name: "payments_status_idx", fields: ["status"] },
+                {
+                    name: "payments_provider_payment_id_uniq",
+                    fields: ["provider", "provider_payment_id"],
+                    unique: true,
+                    where: { provider_payment_id: { [sequelize.Sequelize.Op.ne]: null } },
+                },
+                {
+                    name: "payments_provider_order_id_uniq",
+                    fields: ["provider", "provider_order_id"],
+                    unique: true,
+                    where: { provider_order_id: { [sequelize.Sequelize.Op.ne]: null } },
+                },
+                {
+                    name: "payments_provider_event_id_uniq",
+                    fields: ["provider", "provider_event_id"],
+                    unique: true,
+                    where: { provider_event_id: { [sequelize.Sequelize.Op.ne]: null } },
+                },
             ],
         }
     );

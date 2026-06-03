@@ -8,6 +8,7 @@ const {
 } = require("../validations/products.schema");
 
 async function list(req, res) {
+    console.log('PRODUCT LIST CALL');
     try {
         const query = listProductsQuerySchema.parse(req.query);
 

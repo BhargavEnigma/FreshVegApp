@@ -1,15 +1,33 @@
 "use strict";
 
+const { Op } = require("sequelize");
 const { AppError } = require("../utils/errors");
-const { sequelize, UserAddress, Setting } = require("../models");
+const { sequelize, UserAddress, Setting, Order } = require("../models");
+const { assertAddressServiceable } = require("./warehouseServiceAreas.service");
+
+const ACTIVE_ORDER_STATUSES = [
+    "payment_pending",
+    "placed",
+    "confirmed",
+    "locked",
+    "accepted",
+    "packed",
+    "out_for_delivery",
+];
+
+const TERMINAL_ORDER_STATUSES = [
+    "delivered",
+    "cancelled",
+    "refunded",
+];
 
 async function getDefaultLocationFromSettings({ t }) {
-    // settings table (Blueprint v1.2)
-    // keys: service_city, service_state (or service_city has {name:"Ahmedabad"})
     const [citySetting, stateSetting] = await Promise.all([
         Setting.findByPk("service_city", { transaction: t }),
         Setting.findByPk("service_state", { transaction: t }),
     ]);
+
+    console.log("citySetting : ", citySetting?.value?.name, " stateSetting : ", stateSetting?.value?.name);
 
     const city =
         citySetting?.value?.name ||
@@ -51,6 +69,7 @@ async function list({ userId }) {
             lat: a.lat ?? null,
             lng: a.lng ?? null,
             is_default: !!a.is_default,
+            is_serviceable: !!a.is_serviceable,
             created_at: a.created_at,
             updated_at: a.updated_at,
         })),
@@ -66,15 +85,12 @@ async function create({ userId, payload }) {
 
         const shouldBeDefault = payload.is_default === true || existingCount === 0;
 
-        // ✅ Blueprint v1.2: default city/state should come from settings if not provided
         const defaults = await getDefaultLocationFromSettings({ t });
 
         const finalCity = payload.city ?? defaults.city;
         const finalState = payload.state ?? defaults.state;
 
         if (!finalCity || !finalState) {
-            // If you want to enforce service area strictly, keep this error.
-            // Otherwise remove this check.
             throw new AppError(
                 "SERVICE_LOCATION_NOT_CONFIGURED",
                 "Service city/state is not configured",
@@ -82,8 +98,19 @@ async function create({ userId, payload }) {
             );
         }
 
+        const serviceability = await assertAddressServiceable({
+            address: {
+                area: payload.area,
+                city: finalCity,
+                state: finalState,
+                pincode: payload.pincode,
+                lat: payload.lat ?? null,
+                lng: payload.lng ?? null,
+            },
+            t,
+        });
+
         if (shouldBeDefault) {
-            // Concurrency-safe: lock rows then unset
             await UserAddress.findAll({
                 where: { user_id: userId, is_default: true },
                 transaction: t,
@@ -112,16 +139,38 @@ async function create({ userId, payload }) {
                 lat: payload.lat ?? null,
                 lng: payload.lng ?? null,
                 is_default: shouldBeDefault,
+                is_serviceable: !!serviceability,
             },
             { transaction: t }
         );
 
-        return {
-            address: {
-                id: row.id,
-                is_default: !!row.is_default,
-            },
-        };
+        if (!serviceability) {
+
+            return {
+                address: {
+                    id: row.id,
+                    is_default: !!row.is_default,
+                    is_serviceable: false,
+                    warehouse_id: serviceability?.warehouse?.id ?? null,
+                    service_area_id: serviceability?.service_area?.id ?? null,
+                },
+                message: "Address added successfully, but delivery is not available at this address yet.",
+            };
+
+        } else {
+
+            return {
+                address: {
+                    id: row.id,
+                    is_default: !!row.is_default,
+                    is_serviceable: !!row.is_serviceable,
+                    warehouse_id: serviceability?.warehouse?.id ?? null,
+                    service_area_id: serviceability?.service_area?.id ?? null,
+                },
+                message: "Address added successfully. Delivery is available at this address.",
+            }
+
+        }
     });
 }
 
@@ -139,7 +188,6 @@ async function update({ userId, addressId, payload }) {
 
         const wantsDefault = payload.is_default === true;
 
-        // If user sets is_default=true, enforce single-default
         if (wantsDefault) {
             await UserAddress.findAll({
                 where: { user_id: userId, is_default: true },
@@ -153,7 +201,6 @@ async function update({ userId, addressId, payload }) {
             );
         }
 
-        // If city/state not provided but currently null, apply settings defaults
         let city = payload.city ?? row.city;
         let state = payload.state ?? row.state;
 
@@ -162,6 +209,20 @@ async function update({ userId, addressId, payload }) {
             city = city ?? defaults.city;
             state = state ?? defaults.state;
         }
+
+        const nextAddress = {
+            area: payload.area ?? row.area,
+            city,
+            state,
+            pincode: payload.pincode ?? row.pincode,
+            lat: payload.lat ?? row.lat,
+            lng: payload.lng ?? row.lng,
+        };
+
+        const serviceability = await assertAddressServiceable({
+            address: nextAddress,
+            t,
+        });
 
         await row.update(
             {
@@ -178,17 +239,38 @@ async function update({ userId, addressId, payload }) {
                 lat: payload.lat ?? row.lat,
                 lng: payload.lng ?? row.lng,
                 is_default: wantsDefault ? true : row.is_default,
+                is_serviceable: !!serviceability,
             },
             { transaction: t }
         );
 
-        return {
-            address: {
-                id: row.id,
-                is_default: !!row.is_default,
-                updated_at: row.updated_at,
-            },
-        };
+        if (!serviceability) {
+
+            return {
+                address: {
+                    id: row.id,
+                    is_default: !!row.is_default,
+                    is_serviceable: !!row.is_serviceable,
+                    warehouse_id: serviceability?.warehouse?.id ?? null,
+                    service_area_id: serviceability?.service_area?.id ?? null,
+                },
+                message: "Address updated successfully, but delivery is not available at this address yet.",
+            };
+
+        } else {
+
+            return {
+                address: {
+                    id: row.id,
+                    is_default: !!row.is_default,
+                    is_serviceable: !!row.is_serviceable,
+                    warehouse_id: serviceability?.warehouse?.id ?? null,
+                    service_area_id: serviceability?.service_area?.id ?? null,
+                },
+                message: "Address Updated successfully.",
+            }
+
+        }
     });
 }
 
@@ -203,6 +285,37 @@ async function remove({ userId, addressId }) {
         if (!row) {
             throw new AppError("ADDRESS_NOT_FOUND", "Address not found", 404);
         }
+
+        const activeOrder = await Order.findOne({
+            where: {
+                user_id: userId,
+                address_id: addressId,
+                status: { [Op.in]: ACTIVE_ORDER_STATUSES },
+            },
+            attributes: ["id", "status"],
+            transaction: t,
+            lock: t.LOCK.UPDATE,
+        });
+
+        if (activeOrder) {
+            throw new AppError(
+                "ADDRESS_IN_ACTIVE_ORDER",
+                "This address is used in an active order and cannot be deleted",
+                400
+            );
+        }
+
+        await Order.update(
+            { address_id: null },
+            {
+                where: {
+                    user_id: userId,
+                    address_id: addressId,
+                    status: { [Op.in]: TERMINAL_ORDER_STATUSES },
+                },
+                transaction: t,
+            }
+        );
 
         const wasDefault = !!row.is_default;
 

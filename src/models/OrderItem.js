@@ -49,6 +49,12 @@ module.exports = (sequelize, DataTypes) => {
                 allowNull: false,
                 validate: { min: 0 },
             },
+            original_unit_price_paise: { type: DataTypes.INTEGER, allowNull: true, validate: { min: 0 } },
+            deal_id: { type: DataTypes.UUID, allowNull: true },
+            deal_item_id: { type: DataTypes.UUID, allowNull: true },
+            deal_price_paise: { type: DataTypes.INTEGER, allowNull: true, validate: { min: 0 } },
+            line_discount_paise: { type: DataTypes.INTEGER, allowNull: true, validate: { min: 0 } },
+
         },
         {
             tableName: "order_items",
@@ -64,6 +70,8 @@ module.exports = (sequelize, DataTypes) => {
         OrderItem.belongsTo(db.Order, { foreignKey: "order_id", as: "order" });
         OrderItem.belongsTo(db.Product, { foreignKey: "product_id", as: "product" });
         OrderItem.belongsTo(db.ProductPack, { foreignKey: "product_pack_id", as: "pack" });
+        OrderItem.belongsTo(db.Deal, { foreignKey: "deal_id", as: "deal" });
+        OrderItem.belongsTo(db.DealItem, { foreignKey: "deal_item_id", as: "deal_item" });
     };
 
     return OrderItem;

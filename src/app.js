@@ -15,19 +15,33 @@ const settingsRoutes = require("./routes/settings.routes");
 const paymentsRoutes = require("./routes/payments.routes");
 const catalogRoutes = require("./routes/catalog.routes");
 const ordersRoutes = require("./routes/orders.routes");
+const bannersRoutes = require("./routes/banners.routes");
+const dealsRoutes = require("./routes/deals.routes");
+const devicesRoutes = require("./routes/devices.routes");
 
 const opsCategoryRoutes = require("./routes/ops/categories.routes");
 const adminProductRoutes = require("./routes/admin/products.routes");
 const adminDeliverySlots = require("./routes/admin/deliverySlots.admin.routes");
 const adminSetting = require("./routes/admin/settings.admin.routes");
+const adminBannersRoutes = require("./routes/admin/banners.admin.routes");
+const adminDealsRoutes = require("./routes/admin/deals.admin.routes");
 const orderOpsRoutes = require("./routes/ops/orders.ops.routes");
 const adminWarehouse = require("./routes/admin/warehouses.routes");
 const opsReportsRoutes = require("./routes/ops/reports.ops.routes");
 const opsJobsRoutes = require("./routes/ops/jobs.ops.routes");
+const opsSchedulerRoutes = require("./routes/ops/scheduler.ops.routes.js");
 
 // Admin users + dashboard
 const adminUsersRoutes = require("./routes/admin/users.admin.routes");
 const adminDashboardRoutes = require("./routes/admin/dashboard.admin.routes");
+const adminOrdersRoutes = require("./routes/admin/orders.admin.routes");
+const adminAiRoutes = require("./routes/admin/ai.admin.routes")
+
+const adminCostRoutes = require("./routes/admin/cost.routes");
+
+const deliveryOrdersRoutes = require("./routes/delivery/orders.delivery.routes");
+
+const internalJobsRoutes = require("./routes/internal/jobs.internal.routes");
 
 const { env } = require("./config/env");
 const { ensureDir, getUploadsRoot } = require("./utils/uploads");
@@ -35,6 +49,7 @@ const { notFound, errorHandler } = require("./middlewares/error.middleware");
 
 const app = express();
 
+app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
 app.use(helmet());
@@ -50,7 +65,8 @@ try {
 
 // ✅ Raw body for webhook only
 app.use((req, res, next) => {
-    if (req.originalUrl === "/v1/payments/webhook") {
+    // Note: originalUrl may include query string, so use startsWith.
+    if (String(req.originalUrl || "").startsWith("/v1/payments/webhook")) {
         let data = "";
         req.setEncoding("utf8");
         req.on("data", (chunk) => {
@@ -92,9 +108,13 @@ app.use("/v1/setting", settingsRoutes);
 app.use("/v1/payments", paymentsRoutes);
 app.use("/v1/catalog", catalogRoutes);
 app.use("/v1/orders", ordersRoutes);
+app.use("/v1/banners", bannersRoutes);
+app.use("/v1/deals", dealsRoutes);
+app.use("/v1/devices", devicesRoutes);
 
 // ✅ Admin (move admin delivery slots under /v1/admin/deliveryslot)
 app.use("/v1/admin/product", adminProductRoutes);
+app.use("/v1/admin/cost", adminCostRoutes);
 app.use("/v1/admin/deliveryslot", adminDeliverySlots);
 app.use("/v1/adminSetting", adminSetting);
 app.use("/v1/adminWarehouse", adminWarehouse);
@@ -103,12 +123,21 @@ app.use("/v1/admin/dashboard", adminDashboardRoutes);
 // ✅ Aliases (more consistent paths, keep old ones for backward compatibility)
 app.use("/v1/admin/setting", adminSetting);
 app.use("/v1/admin/warehouse", adminWarehouse);
+app.use("/v1/admin/banners", adminBannersRoutes);
+app.use("/v1/admin/deals", adminDealsRoutes);
+app.use("/v1/admin/orders", adminOrdersRoutes);
+app.use("/v1/admin/ai", adminAiRoutes);
 
 // ✅ Aliases (more consistent paths)
 app.use("/v1/ops/orders", orderOpsRoutes);
 app.use("/v1/ops/reports", opsReportsRoutes);
 app.use("/v1/ops/jobs", opsJobsRoutes);
+app.use("/v1/ops/scheduler", opsSchedulerRoutes);
 app.use("/v1/ops/categories", opsCategoryRoutes);
+
+app.use("/v1/delivery/orders", deliveryOrdersRoutes);
+
+app.use("/v1/internal/jobs", internalJobsRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

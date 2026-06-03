@@ -10,7 +10,7 @@ const addCartItemSchema = z.object({
 });
 
 const updateCartItemSchema = z.object({
-    quantity: z.coerce.number().min(0.001),
+    quantity: z.coerce.number().int().min(0).max(999),
 });
 
 const cartItemIdParamSchema = z.object({

@@ -3,12 +3,11 @@
 const { Op } = require("sequelize");
 const { Product, Category, ProductImage, ProductPack } = require("../models");
 const { AppError } = require("../utils/errors");
-const StorageService = require("./storage.service");
 
 async function list({ query }) {
-    const page = query.page || 1;
-    const limit = query.limit || 20;
-    const offset = (page - 1) * limit;
+    const page = Number(query.page || 1);
+    const limit = query.limit ? Number(query.limit) : null;
+    const offset = limit ? (page - 1) * limit : undefined;
 
     const where = { is_active: true };
 
@@ -24,48 +23,57 @@ async function list({ query }) {
         where.name = { [Op.iLike]: `%${query.q}%` };
     }
 
-    const { rows, count } = await Product.findAndCountAll({
+    const includeOnlySellable = String(query.sellable_only || "true") === "true";
+
+    const packsInclude = {
+        model: ProductPack,
+        as: "packs",
+        required: includeOnlySellable,
+        where: { is_active: true },
+    };
+
+    const findOptions = {
         where,
         include: [
             { model: Category, as: "category", required: false },
             { model: ProductImage, as: "images", required: false },
-            {
-                model: ProductPack,
-                as: "packs",
-                required: false,
-                where: { is_active: true },
-            },
+            packsInclude,
         ],
         order: [["created_at", "DESC"]],
-        limit,
-        offset,
         distinct: true,
+    };
+
+    if (limit) {
+        findOptions.limit = limit;
+        findOptions.offset = offset;
+    }
+
+    const { rows, count } = await Product.findAndCountAll(findOptions);
+
+    const products = rows.map((p) => {
+        const json = p.toJSON();
+
+        if (Array.isArray(json.packs)) {
+            json.packs.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+        }
+
+        if (Array.isArray(json.images)) {
+            json.images.sort((a, b) => {
+                const soA = a.sort_order ?? 0;
+                const soB = b.sort_order ?? 0;
+
+                if (soA !== soB) return soA - soB;
+
+                return String(a.created_at || "").localeCompare(String(b.created_at || ""));
+            });
+        }
+
+        return json;
     });
-
-    const products = await Promise.all(
-        rows.map(async (p) => {
-            const json = p.toJSON();
-
-            if (Array.isArray(json.packs)) {
-                json.packs.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-            }
-
-            if (Array.isArray(json.images)) {
-                json.images.sort((a, b) => {
-                    const soA = a.sort_order ?? 0;
-                    const soB = b.sort_order ?? 0;
-                    if (soA !== soB) return soA - soB;
-                    return String(a.created_at || "").localeCompare(String(b.created_at || ""));
-                });
-            }
-
-            return json;
-        })
-    );
 
     return {
         products,
-        page,
+        page: limit ? page : null,
         limit,
         total: count,
     };

@@ -24,6 +24,7 @@ async function setRoles(req, res) {
     const data = await AdminUsersService.setUserRoles({
         userId: req.params.id,
         roles: body.roles,
+        warehouseIds: body.warehouse_ids,
     });
 
     return ResponseUtil.ok(res, 200, data);

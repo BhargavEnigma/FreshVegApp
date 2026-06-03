@@ -1,6 +1,8 @@
 const { app } = require("./app");
 const { env } = require("./config/env");
 const { testDbConnection } = require("./config/db");
+require("./models");
+
 const { startScheduler } = require("./jobs/scheduler");
 const { startNotificationsWorker } = require("./jobs/notifications.worker");
 
@@ -8,10 +10,18 @@ async function start() {
     await testDbConnection();
     console.log("Database connected");
 
-    startScheduler();
-    startNotificationsWorker();
+    if (process.env.ENABLE_SCHEDULER === "true") {
+        startScheduler();
+    } else {
+        console.log("[scheduler] disabled");
+    }
 
-    // ✅ IMPORTANT for Render: bind to 0.0.0.0
+    if (process.env.ENABLE_NOTIFICATIONS_WORKER === "true") {
+        startNotificationsWorker();
+    } else {
+        console.log("[notifications.worker] disabled");
+    }
+
     app.listen(env.port, "0.0.0.0", () => {
         console.log(`Server running on port ${env.port}`);
     });

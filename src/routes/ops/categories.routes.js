@@ -6,6 +6,7 @@ const router = express.Router();
 const {requireAuth} = require("../../middlewares/auth.middleware");
 const {requireRole} = require("../../middlewares/requireRole");
 const CategoriesController = require("../../controllers/categories.controller");
+const { categoryImagesUpload } = require("../../middlewares/upload.middleware");
 
 // Warehouse + Admin: view
 router.get(
@@ -27,6 +28,7 @@ router.post(
     "/",
     requireAuth,
     requireRole(["admin"]),
+    categoryImagesUpload.single("image"),
     CategoriesController.create
 );
 
@@ -34,6 +36,7 @@ router.patch(
     "/:id",
     requireAuth,
     requireRole(["admin"]),
+    categoryImagesUpload.single("image"),
     CategoriesController.update
 );
 

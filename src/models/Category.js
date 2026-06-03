@@ -29,6 +29,10 @@ module.exports = (sequelize, DataTypes) => {
                 type: DataTypes.INTEGER,
                 allowNull: true,
             },
+            image_url: { type: DataTypes.TEXT, allowNull: true },
+            storage_provider: { type: DataTypes.TEXT, allowNull: true },
+            storage_path: { type: DataTypes.TEXT, allowNull: true },
+
         },
         {
             tableName: "categories",

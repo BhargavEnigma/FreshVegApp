@@ -276,10 +276,18 @@ async function updateItem({ userId, itemId, payload }) {
             throw new AppError("CART_ITEM_NOT_FOUND", "Cart item not found", 404);
         }
 
-        await item.update(
-            { quantity: payload.quantity },
-            { transaction: t }
-        );
+        const qty = Number(payload.quantity);
+        if (!Number.isFinite(qty) || !Number.isInteger(qty) || qty < 0) {
+            throw new AppError("INVALID_QUANTITY", "Quantity must be an integer >= 0", 400);
+        }
+
+        // ✅ If 0 => remove the item (common cart UX)
+        if (qty === 0) {
+            await item.destroy({ transaction: t });
+            return buildCartResponse({ cartId: cart.id, t });
+        }
+
+        await item.update({ quantity: qty }, { transaction: t });
 
         return buildCartResponse({ cartId: cart.id, t });
     });

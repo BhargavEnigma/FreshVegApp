@@ -1,13 +1,61 @@
 "use strict";
 
-const { sequelize, User, UserRole } = require("../../models");
+const { sequelize, User, UserRole, UserWarehouseAssignment } = require("../../models");
 const { Op } = require("sequelize");
 const { AppError } = require("../../utils/errors");
+
+function assertWarehouseScopedInternalUser({ roles, warehouseIds }) {
+    const normalizedRoles = (roles || []).map((x) => String(x).trim());
+    const requiresWarehouse = normalizedRoles.some((role) =>
+        ["warehouse_manager", "delivery_partner"].includes(role)
+    );
+
+    if (requiresWarehouse && !(warehouseIds || []).length) {
+        throw new AppError(
+            "WAREHOUSE_REQUIRED",
+            "warehouse_ids is required for warehouse_manager and delivery_partner users",
+            400
+        );
+    }
+}
+
+async function syncWarehouseAssignments({ userId, warehouseIds = [], transaction }) {
+    const normalized = Array.from(new Set((warehouseIds || []).map(String)));
+
+    await UserWarehouseAssignment.destroy({
+        where: {
+            user_id: userId,
+            warehouse_id: { [Op.notIn]: normalized.length ? normalized : [null] },
+        },
+        transaction,
+    });
+
+    for (const warehouseId of normalized) {
+        await UserWarehouseAssignment.findOrCreate({
+            where: { user_id: userId, warehouse_id: warehouseId },
+            defaults: { user_id: userId, warehouse_id: warehouseId },
+            transaction,
+            lock: transaction.LOCK.UPDATE,
+        });
+    }
+
+    if (!normalized.length) {
+        await UserWarehouseAssignment.destroy({
+            where: { user_id: userId },
+            transaction,
+        });
+    }
+}
 
 async function createUserWithRoles({ payload }) {
     return sequelize.transaction(async (t) => {
         const phone = String(payload.phone).trim();
         const roles = payload.roles.map((r) => String(r).trim());
+
+        assertWarehouseScopedInternalUser({
+            roles,
+            warehouseIds: payload.warehouse_ids || [],
+        });
 
         const [user] = await User.findOrCreate({
             where: { phone },
@@ -21,22 +69,17 @@ async function createUserWithRoles({ payload }) {
             lock: t.LOCK.UPDATE,
         });
 
-        // Ensure active
         if (user.status !== "active") {
             await user.update({ status: "active" }, { transaction: t });
         }
 
-        // Update profile fields if passed (safe and additive)
-        const nextFullName = payload.full_name || null;
-        const nextEmail = payload.email || null;
         const updates = {};
-        if (nextFullName && user.full_name !== nextFullName) updates.full_name = nextFullName;
-        if (nextEmail && user.email !== nextEmail) updates.email = nextEmail;
+        if (payload.full_name && user.full_name !== payload.full_name) updates.full_name = payload.full_name;
+        if (payload.email && user.email !== payload.email) updates.email = payload.email;
         if (Object.keys(updates).length) {
             await user.update(updates, { transaction: t });
         }
 
-        // Insert roles idempotently
         for (const role of roles) {
             await UserRole.findOrCreate({
                 where: { user_id: user.id, role },
@@ -46,11 +89,24 @@ async function createUserWithRoles({ payload }) {
             });
         }
 
-        const userRoles = await UserRole.findAll({
-            where: { user_id: user.id },
-            attributes: ["role"],
+        await syncWarehouseAssignments({
+            userId: user.id,
+            warehouseIds: payload.warehouse_ids || [],
             transaction: t,
         });
+
+        const [userRoles, assignments] = await Promise.all([
+            UserRole.findAll({
+                where: { user_id: user.id },
+                attributes: ["role"],
+                transaction: t,
+            }),
+            UserWarehouseAssignment.findAll({
+                where: { user_id: user.id },
+                attributes: ["warehouse_id"],
+                transaction: t,
+            }),
+        ]);
 
         return {
             user: {
@@ -59,12 +115,13 @@ async function createUserWithRoles({ payload }) {
                 full_name: user.full_name,
                 status: user.status,
                 roles: userRoles.map((x) => x.role),
+                warehouse_ids: assignments.map((x) => x.warehouse_id),
             },
         };
     });
 }
 
-async function setUserRoles({ userId, roles }) {
+async function setUserRoles({ userId, roles, warehouseIds = [] }) {
     return sequelize.transaction(async (t) => {
         const user = await User.findByPk(userId, { transaction: t, lock: t.LOCK.UPDATE });
         if (!user) {
@@ -73,16 +130,19 @@ async function setUserRoles({ userId, roles }) {
 
         const normalized = roles.map((r) => String(r).trim());
 
-        // Remove existing roles not in new list
+        assertWarehouseScopedInternalUser({
+            roles: normalized,
+            warehouseIds,
+        });
+
         await UserRole.destroy({
             where: {
                 user_id: user.id,
-                role: { [require("sequelize").Op.notIn]: normalized },
+                role: { [Op.notIn]: normalized },
             },
             transaction: t,
         });
 
-        // Add missing roles
         for (const role of normalized) {
             await UserRole.findOrCreate({
                 where: { user_id: user.id, role },
@@ -92,11 +152,24 @@ async function setUserRoles({ userId, roles }) {
             });
         }
 
-        const updated = await UserRole.findAll({
-            where: { user_id: user.id },
-            attributes: ["role"],
+        await syncWarehouseAssignments({
+            userId: user.id,
+            warehouseIds,
             transaction: t,
         });
+
+        const [updated, assignments] = await Promise.all([
+            UserRole.findAll({
+                where: { user_id: user.id },
+                attributes: ["role"],
+                transaction: t,
+            }),
+            UserWarehouseAssignment.findAll({
+                where: { user_id: user.id },
+                attributes: ["warehouse_id"],
+                transaction: t,
+            }),
+        ]);
 
         return {
             user: {
@@ -105,6 +178,7 @@ async function setUserRoles({ userId, roles }) {
                 full_name: user.full_name,
                 status: user.status,
                 roles: updated.map((x) => x.role),
+                warehouse_ids: assignments.map((x) => x.warehouse_id),
             },
         };
     });
@@ -130,8 +204,6 @@ async function listUsers({ query }) {
         ];
     }
 
-    // Role filter is applied via a subquery on user_roles to avoid changing behavior elsewhere
-    // and to keep query fast with existing indexes.
     if (query.role) {
         where.id = {
             [Op.in]: sequelize.literal(
@@ -152,6 +224,12 @@ async function listUsers({ query }) {
                 attributes: ["role"],
                 required: false,
             },
+            {
+                model: UserWarehouseAssignment,
+                as: "warehouse_assignments",
+                attributes: ["warehouse_id"],
+                required: false,
+            },
         ],
         order: [[sortBy, sortDir]],
         limit,
@@ -168,6 +246,7 @@ async function listUsers({ query }) {
         last_login_at: u.last_login_at,
         created_at: u.created_at,
         roles: (u.roles || []).map((r) => r.role),
+        warehouse_ids: (u.warehouse_assignments || []).map((x) => x.warehouse_id),
     }));
 
     return {
@@ -188,6 +267,12 @@ async function getUserById({ userId }) {
                 attributes: ["role"],
                 required: false,
             },
+            {
+                model: UserWarehouseAssignment,
+                as: "warehouse_assignments",
+                attributes: ["warehouse_id"],
+                required: false,
+            },
         ],
     });
 
@@ -205,6 +290,7 @@ async function getUserById({ userId }) {
             last_login_at: user.last_login_at,
             created_at: user.created_at,
             roles: (user.roles || []).map((r) => r.role),
+            warehouse_ids: (user.warehouse_assignments || []).map((x) => x.warehouse_id),
         },
     };
 }

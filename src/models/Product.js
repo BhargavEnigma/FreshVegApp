@@ -54,6 +54,10 @@ module.exports = (sequelize, DataTypes) => {
                 allowNull: false,
                 defaultValue: false,
             },
+            tag: {
+                type: DataTypes.TEXT,
+                allowNull: true,
+            }
         },
         {
             tableName: "products",

@@ -1,0 +1,59 @@
+substitutions:
+  _REGION: "asia-south1"
+  _SERVICE_NAME: "dailyveg-backend"
+  _DB_HOST: ""
+  _DB_PORT: "5432"
+  _DB_NAME: "postgres"
+  _DB_USER: "postgres"
+  _DB_SSL: "true"
+  _STORAGE_PROVIDER: "supabase"
+  _SUPABASE_URL: ""
+  _SUPABASE_STORAGE_BUCKET: "product-images"
+  _SUPABASE_BUCKET_PUBLIC: "true"
+  _RAZORPAY_KEY_ID: ""
+  _MSG91_TEMPLATE_ID: ""
+  _OTP_BYPASS_ENABLED: "false"
+  _ENABLE_SCHEDULER: "false"
+  _ENABLE_NOTIFICATIONS_WORKER: "false"
+  _CORS_ORIGINS: ""
+
+steps:
+  - name: "node:20"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - "npm ci && npm run db:migrate"
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        gcloud run deploy "${_SERVICE_NAME}" \
+          --source . \
+          --region "${_REGION}" \
+          --allow-unauthenticated \
+          --port 8080 \
+          --memory 1Gi \
+          --cpu 1 \
+          --min-instances 0 \
+          --max-instances 3 \
+          --set-env-vars "^@^NODE_ENV=production@DB_HOST=${_DB_HOST}@DB_PORT=${_DB_PORT}@DB_NAME=${_DB_NAME}@DB_USER=${_DB_USER}@DB_SSL=${_DB_SSL}@STORAGE_PROVIDER=${_STORAGE_PROVIDER}@SUPABASE_URL=${_SUPABASE_URL}@SUPABASE_STORAGE_BUCKET=${_SUPABASE_STORAGE_BUCKET}@SUPABASE_BUCKET_PUBLIC=${_SUPABASE_BUCKET_PUBLIC}@RAZORPAY_KEY_ID=${_RAZORPAY_KEY_ID}@MSG91_TEMPLATE_ID=${_MSG91_TEMPLATE_ID}@OTP_BYPASS_ENABLED=${_OTP_BYPASS_ENABLED}@ENABLE_SCHEDULER=${_ENABLE_SCHEDULER}@ENABLE_NOTIFICATIONS_WORKER=${_ENABLE_NOTIFICATIONS_WORKER}@CORS_ORIGINS=${_CORS_ORIGINS}" \
+          --set-secrets DB_PASSWORD=DB_PASSWORD:latest,JWT_ACCESS_SECRET=JWT_ACCESS_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest,MSG91_AUTH_KEY=MSG91_AUTH_KEY:latest,RAZORPAY_KEY_SECRET=RAZORPAY_KEY_SECRET:latest,RAZORPAY_WEBHOOK_SECRET=RAZORPAY_WEBHOOK_SECRET:latest,FIREBASE_SERVICE_ACCOUNT_JSON=FIREBASE_SERVICE_ACCOUNT_JSON:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,INTERNAL_JOB_SECRET=INTERNAL_JOB_SECRET:latest
+
+        SERVICE_URL=$(gcloud run services describe "${_SERVICE_NAME}" \
+          --region "${_REGION}" \
+          --format='value(status.url)')
+
+        gcloud run services update "${_SERVICE_NAME}" \
+          --region "${_REGION}" \
+          --update-env-vars PUBLIC_BASE_URL="$SERVICE_URL"
+
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - "npm install -g firebase-tools && firebase deploy --only hosting --project $PROJECT_ID"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

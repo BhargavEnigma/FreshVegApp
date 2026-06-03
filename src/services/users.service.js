@@ -1,7 +1,8 @@
 "use strict";
 
 const { AppError } = require("../utils/errors");
-const { User, UserRole } = require("../models");
+const { User, UserRole, UserDevice } = require("../models");
+const DevicesService = require("./devices.service");
 
 function normalizeEmail(email) {
     if (email === null || email === undefined) {
@@ -27,6 +28,13 @@ async function getMe({ userId }) {
 
     const roles = rolesRows.map((r) => r.role);
 
+    const devices = await UserDevice.findAll({
+        where: { user_id: userId, is_active: true },
+        attributes: ["fcm_token"],
+    });
+
+    const fcm_tokens = Array.from(new Set((devices || []).map((d) => d.fcm_token).filter(Boolean)));
+
     return {
         user: {
             id: user.id,
@@ -35,7 +43,10 @@ async function getMe({ userId }) {
             email: user.email ?? null,
             status: user.status,
             roles,
+            // Backward compatibility (legacy single-token storage)
             fcm_token: user.fcm_token ?? null,
+            // Preferred multi-device tokens
+            fcm_tokens,
             created_at: user.created_at,
             updated_at: user.updated_at,
             last_login_at: user.last_login_at ?? null,
@@ -65,7 +76,9 @@ async function updateProfile({ userId, full_name, email, fcm_token }) {
         payload.email = normalizeEmail(email);
     }
 
-    // ✅ Blueprint v1.2 readiness: store token for push notifications
+    // ⚠️ Legacy behavior kept for backward compatibility:
+    // Previously, profile update accepted fcm_token and overwrote users.fcm_token.
+    // Now we ALSO register it in user_devices (multi-device safe).
     if (fcm_token !== undefined) {
         payload.fcm_token = fcm_token;
     }
@@ -73,6 +86,21 @@ async function updateProfile({ userId, full_name, email, fcm_token }) {
     // If nothing to update, still return current user
     if (Object.keys(payload).length > 0) {
         await user.update(payload);
+    }
+
+    // If fcm_token provided, upsert into user_devices as well (best effort)
+    if (fcm_token !== undefined && fcm_token !== null) {
+        try {
+            await DevicesService.registerDevice({
+                userId,
+                device_id: null,
+                platform: null,
+                fcm_token,
+            });
+        } catch (e) {
+            // Don't fail profile update due to push-token registration
+            console.error("FCM TOKEN UPSERT (legacy profile) FAILED:", e);
+        }
     }
 
     const rolesRows = await UserRole.findAll({

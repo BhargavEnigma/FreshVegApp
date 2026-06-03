@@ -19,6 +19,45 @@ const {
     reorderProductImagesSchema,
 } = require("../../validations/admin/products.admin.validation");
 
+async function list(req, res) {
+    try {
+        const query = {
+            page: Number(req.query.page || 1),
+            limit: Number(req.query.limit || 20),
+            q: req.query.q ? String(req.query.q) : null,
+            category_id: req.query.category_id ? String(req.query.category_id) : null,
+            include_inactive: String(req.query.include_inactive || "").toLowerCase() === "true",
+            include_out_of_stock: String(req.query.include_out_of_stock || "").toLowerCase() === "true",
+        };
+
+        const data = await AdminProductsService.list({ query });
+        return Response.ok(res, 200, data);
+    } catch (e) {
+        console.log("ADMIN LIST PRODUCT ERROR:", e);
+        if (e instanceof AppError) {
+            return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
+        }
+        return Response.fail(res, 500, "PROVIDER_ERROR", "Something went wrong");
+    }
+}
+
+async function getById(req, res) {
+    try {
+        const params = productIdParamSchema.parse(req.params);
+        const data = await AdminProductsService.getById({ productId: params.productId });
+        return Response.ok(res, 200, data);
+    } catch (e) {
+        console.log("ADMIN GET PRODUCT ERROR:", e);
+        if (e instanceof AppError) {
+            return Response.fail(res, e.httpStatus || 500, e.code, e.message, e.details || null);
+        }
+        if (e?.name === "ZodError") {
+            return Response.fail(res, 400, "VALIDATION_ERROR", "Invalid request", e.issues ?? null);
+        }
+        return Response.fail(res, 500, "PROVIDER_ERROR", "Something went wrong");
+    }
+}
+
 async function create(req, res) {
     try {
         const body = createProductSchema.parse(req.body);
@@ -405,6 +444,8 @@ async function deleteProduct(req, res) {
 
 
 module.exports = {
+    list,
+    getById,
     create,
     createWithImages,
     update,
@@ -416,7 +457,6 @@ module.exports = {
     setPackActive,
     deletePack,
     deleteProduct,
-    // Images
     addImage,
     uploadImages,
     updateImage,
