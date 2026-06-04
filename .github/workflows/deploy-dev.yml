@@ -60,6 +60,17 @@ jobs:
       - name: Run build if present
         run: npm run build --if-present
 
+      - name: Debug GitHub deploy inputs
+        run: |
+          echo "Repository: ${{ github.repository }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Environment: dev"
+          echo "GCP project: ${{ vars.GCP_PROJECT_ID }}"
+          echo "Region: ${{ vars.GCP_REGION }}"
+          echo "Cloud Run service: ${{ vars.CLOUD_RUN_SERVICE }}"
+          echo "Has GCP_SERVICE_ACCOUNT secret: ${{ secrets.GCP_SERVICE_ACCOUNT != '' }}"
+          echo "Has GCP_WORKLOAD_IDENTITY_PROVIDER secret: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' }}"
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
