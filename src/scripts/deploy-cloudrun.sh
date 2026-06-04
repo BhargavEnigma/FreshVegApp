@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ -f ".env.cloudrun" ]; then
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+cd "$REPO_ROOT"
+
+if [ -f "${REPO_ROOT}/.env.cloudrun" ]; then
     set -a
-    source .env.cloudrun
+    source "${REPO_ROOT}/.env.cloudrun"
     set +a
 fi
 
@@ -177,7 +181,7 @@ ENV_ARG="^${ENV_DELIMITER}^$(join_with_delimiter "${ENV_DELIMITER}" "${ENV_VARS[
 SECRET_ARG="^${SECRET_DELIMITER}^$(join_with_delimiter "${SECRET_DELIMITER}" "${SECRET_VARS[@]}")"
 
 gcloud run deploy "$SERVICE_NAME" \
-    --source . \
+    --source "$REPO_ROOT" \
     --region "$REGION" \
     --allow-unauthenticated \
     --port 8080 \

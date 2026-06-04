@@ -24,7 +24,7 @@ jobs:
       GCP_REGION: ${{ vars.GCP_REGION }}
       CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
       FIREBASE_PROJECT_ALIAS: ${{ vars.FIREBASE_PROJECT_ALIAS }}
-      FIREBASE_CONFIG_FILE: ${{ vars.FIREBASE_CONFIG_FILE }}
+      FIREBASE_CONFIG_FILE: ${{ vars.FIREBASE_CONFIG_FILE != '' && vars.FIREBASE_CONFIG_FILE || 'firebase.prod.json' }}
       NODE_ENV: ${{ vars.NODE_ENV }}
       DB_HOST: ${{ vars.DB_HOST }}
       DB_PORT: ${{ vars.DB_PORT }}
@@ -76,6 +76,9 @@ jobs:
 
       - name: Run build if present
         run: npm run build --if-present
+
+      - name: Preflight deployment configuration
+        run: bash src/scripts/preflight-deploy.sh
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
