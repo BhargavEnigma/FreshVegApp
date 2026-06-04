@@ -23,6 +23,8 @@ jobs:
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       GCP_REGION: ${{ vars.GCP_REGION }}
       CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+      FIREBASE_PROJECT_ALIAS: ${{ vars.FIREBASE_PROJECT_ALIAS }}
+      FIREBASE_CONFIG_FILE: ${{ vars.FIREBASE_CONFIG_FILE }}
       NODE_ENV: ${{ vars.NODE_ENV }}
       DB_HOST: ${{ vars.DB_HOST }}
       DB_PORT: ${{ vars.DB_PORT }}

@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${FIREBASE_PROJECT_ALIAS:?Missing FIREBASE_PROJECT_ALIAS}"
-: "${FIREBASE_CONFIG_FILE:?Missing FIREBASE_CONFIG_FILE}"
+DEPLOY_PROJECT_ID="${GCP_PROJECT_ID:-${FIREBASE_PROJECT_ALIAS:-${PROJECT_ID:-}}}"
+FIREBASE_CONFIG_PATH="${FIREBASE_CONFIG_FILE:-firebase.json}"
 
-firebase deploy \
+if [ -z "$DEPLOY_PROJECT_ID" ]; then
+    echo "Missing Firebase deploy project. Set GCP_PROJECT_ID or FIREBASE_PROJECT_ALIAS." >&2
+    exit 1
+fi
+
+if [ ! -f "$FIREBASE_CONFIG_PATH" ]; then
+    echo "Firebase config file not found: $FIREBASE_CONFIG_PATH" >&2
+    exit 1
+fi
+
+npx firebase-tools deploy \
     --only hosting \
-    --project "$FIREBASE_PROJECT_ALIAS" \
-    --config "$FIREBASE_CONFIG_FILE"
+    --project "$DEPLOY_PROJECT_ID" \
+    --config "$FIREBASE_CONFIG_PATH"
