@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     env:
+      DEPLOY_ENVIRONMENT: production
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
       GCP_REGION: ${{ vars.GCP_REGION }}
       CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
@@ -76,6 +77,18 @@ jobs:
 
       - name: Run build if present
         run: npm run build --if-present
+
+      - name: Debug GitHub deploy inputs
+        run: |
+          echo "Repository: ${{ github.repository }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Environment: production"
+          echo "GCP project: ${{ vars.GCP_PROJECT_ID }}"
+          echo "Region: ${{ vars.GCP_REGION }}"
+          echo "Cloud Run service: ${{ vars.CLOUD_RUN_SERVICE }}"
+          echo "Firebase config file: ${{ vars.FIREBASE_CONFIG_FILE != '' && vars.FIREBASE_CONFIG_FILE || 'firebase.prod.json' }}"
+          echo "Has GCP_SERVICE_ACCOUNT secret: ${{ secrets.GCP_SERVICE_ACCOUNT != '' }}"
+          echo "Has GCP_WORKLOAD_IDENTITY_PROVIDER secret: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' }}"
 
       - name: Preflight deployment configuration
         run: bash src/scripts/preflight-deploy.sh
