@@ -65,12 +65,20 @@ module.exports = {
         );
 
         // 2) Repair existing table (if it was created earlier with old column names)
-        //    - rename price_paise/price -> selling_price_paise
-        //    - rename mrp -> mrp_paise
-        //    - add missing columns if needed
         await queryInterface.sequelize.query(`
             DO $$
             BEGIN
+                -- Add label column if missing
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='product_packs' AND column_name='label'
+                ) THEN
+                    ALTER TABLE product_packs ADD COLUMN label varchar(40);
+                    -- You may need to set a default value for existing rows
+                    -- UPDATE product_packs SET label = 'default' WHERE label IS NULL;
+                    ALTER TABLE product_packs ALTER COLUMN label SET NOT NULL;
+                END IF;
+
                 -- selling_price_paise
                 IF NOT EXISTS (
                     SELECT 1 FROM information_schema.columns

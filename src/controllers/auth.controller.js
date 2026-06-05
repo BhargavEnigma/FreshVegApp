@@ -73,6 +73,7 @@ async function verifyOtp(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
+        console.log('E : ', e);
         console.error("AUTH_ERROR", {
             code: e?.code || e?.name || "UNKNOWN",
             message: e?.message || "Auth error",

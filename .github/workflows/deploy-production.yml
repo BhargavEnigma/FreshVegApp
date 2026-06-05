@@ -1,0 +1,100 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Cloud Run and Firebase Hosting (production)
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+      FIREBASE_PROJECT_ALIAS: ${{ vars.FIREBASE_PROJECT_ALIAS }}
+      FIREBASE_CONFIG_FILE: ${{ vars.FIREBASE_CONFIG_FILE != '' && vars.FIREBASE_CONFIG_FILE || 'firebase.prod.json' }}
+      NODE_ENV: ${{ vars.NODE_ENV }}
+      DB_HOST: ${{ vars.DB_HOST }}
+      DB_PORT: ${{ vars.DB_PORT }}
+      DB_NAME: ${{ vars.DB_NAME }}
+      DB_USER: ${{ vars.DB_USER }}
+      DB_SSL: ${{ vars.DB_SSL }}
+      SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+      STORAGE_PROVIDER: ${{ vars.STORAGE_PROVIDER }}
+      SUPABASE_STORAGE_BUCKET: ${{ vars.SUPABASE_STORAGE_BUCKET }}
+      SUPABASE_BUCKET_PUBLIC: ${{ vars.SUPABASE_BUCKET_PUBLIC }}
+      DB_SYNC_MODE: ${{ vars.DB_SYNC_MODE }}
+      JWT_ACCESS_EXPIRES_IN: ${{ vars.JWT_ACCESS_EXPIRES_IN }}
+      JWT_REFRESH_EXPIRES_IN_DAYS: ${{ vars.JWT_REFRESH_EXPIRES_IN_DAYS }}
+      RAZORPAY_KEY_ID: ${{ vars.RAZORPAY_KEY_ID }}
+      MSG91_TEMPLATE_ID: ${{ vars.MSG91_TEMPLATE_ID }}
+      MSG91_BASE_URL: ${{ vars.MSG91_BASE_URL }}
+      MSG91_REALTIME_RESPONSE: ${{ vars.MSG91_REALTIME_RESPONSE }}
+      OTP_EXPIRY_MINUTES: ${{ vars.OTP_EXPIRY_MINUTES }}
+      OTP_LENGTH: ${{ vars.OTP_LENGTH }}
+      OTP_BYPASS_ENABLED: ${{ vars.OTP_BYPASS_ENABLED }}
+      OTP_BYPASS_ALLOWED_PHONES: ${{ vars.OTP_BYPASS_ALLOWED_PHONES }}
+      RAZORPAY_TEST_CHECKOUT_PAGE_ENABLED: ${{ vars.RAZORPAY_TEST_CHECKOUT_PAGE_ENABLED }}
+      ENABLE_SCHEDULER: ${{ vars.ENABLE_SCHEDULER }}
+      ENABLE_NOTIFICATIONS_WORKER: ${{ vars.ENABLE_NOTIFICATIONS_WORKER }}
+      NOTIFICATION_MAX_ATTEMPTS: ${{ vars.NOTIFICATION_MAX_ATTEMPTS }}
+      ORDER_LOCK_DAYS_AHEAD: ${{ vars.ORDER_LOCK_DAYS_AHEAD }}
+      GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+      JOB_RUN_STALE_MS: ${{ vars.JOB_RUN_STALE_MS }}
+      UPLOADS_DIR: ${{ vars.UPLOADS_DIR }}
+      CORS_ORIGINS: ${{ vars.CORS_ORIGINS }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ vars.NODE_VERSION || '20' }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run lint if present
+        run: npm run lint --if-present
+
+      - name: Run tests if present
+        run: npm test --if-present
+
+      - name: Run build if present
+        run: npm run build --if-present
+
+      - name: Preflight deployment configuration
+        run: bash src/scripts/preflight-deploy.sh
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Deploy Cloud Run
+        run: bash src/scripts/deploy-cloudrun.sh
+
+      - name: Deploy Firebase Hosting
+        run: bash src/scripts/deploy-firebase-hosting.sh

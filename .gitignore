@@ -1,5 +1,7 @@
 .env
 .env.*
+!.env.example
+!.env.cloudrun.example
 node_modules
 uploads
 .DS_Store

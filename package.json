@@ -9,7 +9,9 @@
     "db:migrate": "sequelize-cli db:migrate",
     "db:migrate:undo": "sequelize-cli db:migrate:undo",
     "db:migrate:undo:all": "sequelize-cli db:migrate:undo:all",
-    "db:seed": "sequelize-cli db:seed:all"
+    "db:seed": "sequelize-cli db:seed:all",
+    "deploy:dev:hosting": "firebase deploy --only hosting --project dev --config firebase.dev.json",
+    "deploy:prod:hosting": "firebase deploy --only hosting --project prod --config firebase.prod.json"
   },
   "engines": {
     "node": "20"
