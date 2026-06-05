@@ -21,12 +21,12 @@ jobs:
     environment: dev
     env:
       DEPLOY_ENVIRONMENT: dev
-      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-      GCP_REGION: ${{ vars.GCP_REGION }}
-      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
-      FIREBASE_PROJECT_ALIAS: ${{ vars.FIREBASE_PROJECT_ALIAS }}
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID != '' && vars.GCP_PROJECT_ID || 'dailyvegdev' }}
+      GCP_REGION: ${{ vars.GCP_REGION != '' && vars.GCP_REGION || 'asia-south1' }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE != '' && vars.CLOUD_RUN_SERVICE || 'freshveg-backend-dev' }}
+      FIREBASE_PROJECT_ALIAS: ${{ vars.FIREBASE_PROJECT_ALIAS != '' && vars.FIREBASE_PROJECT_ALIAS || 'dev' }}
       FIREBASE_CONFIG_FILE: ${{ vars.FIREBASE_CONFIG_FILE != '' && vars.FIREBASE_CONFIG_FILE || 'firebase.dev.json' }}
-      NODE_ENV: ${{ vars.NODE_ENV }}
+      NODE_ENV: ${{ vars.NODE_ENV != '' && vars.NODE_ENV || 'development' }}
       DB_HOST: ${{ vars.DB_HOST }}
       DB_PORT: ${{ vars.DB_PORT }}
       DB_NAME: ${{ vars.DB_NAME }}
@@ -86,9 +86,9 @@ jobs:
           echo "Repository: ${{ github.repository }}"
           echo "Ref: ${{ github.ref }}"
           echo "Environment: dev"
-          echo "GCP project: ${{ vars.GCP_PROJECT_ID }}"
-          echo "Region: ${{ vars.GCP_REGION }}"
-          echo "Cloud Run service: ${{ vars.CLOUD_RUN_SERVICE }}"
+          echo "GCP project: ${{ vars.GCP_PROJECT_ID != '' && vars.GCP_PROJECT_ID || 'dailyvegdev' }}"
+          echo "Region: ${{ vars.GCP_REGION != '' && vars.GCP_REGION || 'asia-south1' }}"
+          echo "Cloud Run service: ${{ vars.CLOUD_RUN_SERVICE != '' && vars.CLOUD_RUN_SERVICE || 'freshveg-backend-dev' }}"
           echo "Firebase config file: ${{ vars.FIREBASE_CONFIG_FILE != '' && vars.FIREBASE_CONFIG_FILE || 'firebase.dev.json' }}"
           echo "Has GCP_SERVICE_ACCOUNT secret: ${{ secrets.GCP_SERVICE_ACCOUNT != '' }}"
           echo "Has GCP_WORKLOAD_IDENTITY_PROVIDER secret: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER != '' }}"
@@ -104,7 +104,7 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
+          project_id: ${{ vars.GCP_PROJECT_ID != '' && vars.GCP_PROJECT_ID || 'dailyvegdev' }}
 
       - name: Deploy Cloud Run
         run: bash src/scripts/deploy-cloudrun.sh
