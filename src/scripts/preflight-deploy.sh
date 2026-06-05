@@ -8,6 +8,7 @@ cd "$REPO_ROOT"
 PROJECT_ID="${GCP_PROJECT_ID:-${PROJECT_ID:-}}"
 REGION="${GCP_REGION:-${REGION:-}}"
 SERVICE_NAME="${CLOUD_RUN_SERVICE:-${SERVICE_NAME:-}}"
+DEPLOY_ENVIRONMENT_NAME="${DEPLOY_ENVIRONMENT:-unknown}"
 DEPLOY_PROJECT_ID="${PROJECT_ID:-${FIREBASE_PROJECT_ALIAS:-}}"
 FIREBASE_CONFIG_PATH="${FIREBASE_CONFIG_FILE:-firebase.json}"
 
@@ -67,10 +68,10 @@ require_file "$FIREBASE_CONFIG_PATH"
 require_dir "${REPO_ROOT}/public"
 
 if [ "${#MISSING_VARS[@]}" -gt 0 ] || [ "${#MISSING_FILES[@]}" -gt 0 ]; then
-    echo "Deployment preflight failed." >&2
+    echo "Deployment preflight failed for GitHub Environment: ${DEPLOY_ENVIRONMENT_NAME}" >&2
 
     if [ "${#MISSING_VARS[@]}" -gt 0 ]; then
-        echo "Missing GitHub Environment variables:" >&2
+        echo "Missing GitHub Environment variables. Add these under GitHub Settings > Environments > ${DEPLOY_ENVIRONMENT_NAME} > Variables:" >&2
         for name in "${MISSING_VARS[@]}"; do
             echo "  - ${name}" >&2
         done
@@ -87,6 +88,7 @@ if [ "${#MISSING_VARS[@]}" -gt 0 ] || [ "${#MISSING_FILES[@]}" -gt 0 ]; then
 fi
 
 echo "Deployment preflight passed."
+echo "GitHub Environment: ${DEPLOY_ENVIRONMENT_NAME}"
 echo "Cloud Run service: ${SERVICE_NAME}"
 echo "GCP project: ${PROJECT_ID}"
 echo "Firebase config: ${FIREBASE_CONFIG_PATH}"

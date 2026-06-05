@@ -81,11 +81,7 @@ const env = {
 
 function validateProductionEnv() {
 
-    if (env.nodeEnv !== "develpoment") {
-        return;
-    }
-
-    if (env.otp.bypassEnabled) {
+    if (env.nodeEnv === "production" && env.otp.bypassEnabled) {
         throw new Error("OTP_BYPASS_ENABLED must be false in production");
     }
 
