@@ -1,0 +1,15 @@
+# Disabled on purpose.
+#
+# This repository deploys an Express backend behind Firebase Hosting rewrites
+# to Cloud Run, using environment-specific Firebase configs:
+# - firebase.dev.json
+# - firebase.prod.json
+#
+# A Hosting-only PR preview is misleading here because it does not create a
+# matching Cloud Run preview revision for backend changes. The active deploy
+# flows are:
+# - .github/workflows/deploy-dev.yml
+# - .github/workflows/deploy-production.yml
+#
+# If PR previews are needed in the future, implement a Cloud Run-aware preview
+# workflow instead of re-enabling this file as-is.

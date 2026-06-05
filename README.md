@@ -145,4 +145,11 @@ After a workflow runs:
 
 ## PR Preview Workflow
 
-`.github/workflows/firebase-hosting-pull-request.yml` is intentionally limited to static Hosting-related changes only. It does not deploy Cloud Run and should not be treated as a full backend preview.
+PR preview deploys are intentionally disabled for this repository. The app is deployed through Firebase Hosting rewrites to Cloud Run, so a Hosting-only preview does not create a matching backend revision and can give misleading PR results.
+
+The active deployment workflows remain:
+
+- `.github/workflows/deploy-dev.yml`
+- `.github/workflows/deploy-production.yml`
+
+If PR previews are needed later, they should be implemented as a Cloud Run-aware preview flow rather than re-enabling the old Hosting-only workflow.
