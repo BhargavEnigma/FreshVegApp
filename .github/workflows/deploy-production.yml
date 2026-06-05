@@ -18,9 +18,9 @@ jobs:
   deploy:
     name: Deploy to Cloud Run and Firebase Hosting (production)
     runs-on: ubuntu-latest
-    environment: production
+    environment: Prod
     env:
-      DEPLOY_ENVIRONMENT: production
+      DEPLOY_ENVIRONMENT: Prod
       GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID != '' && vars.GCP_PROJECT_ID || 'fresca-f3184' }}
       GCP_REGION: ${{ vars.GCP_REGION != '' && vars.GCP_REGION || 'asia-south1' }}
       CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE != '' && vars.CLOUD_RUN_SERVICE || 'dailyveg-backend' }}
@@ -82,7 +82,7 @@ jobs:
         run: |
           echo "Repository: ${{ github.repository }}"
           echo "Ref: ${{ github.ref }}"
-          echo "Environment: production"
+          echo "Environment: Prod"
           echo "GCP project: ${{ vars.GCP_PROJECT_ID != '' && vars.GCP_PROJECT_ID || 'fresca-f3184' }}"
           echo "Region: ${{ vars.GCP_REGION != '' && vars.GCP_REGION || 'asia-south1' }}"
           echo "Cloud Run service: ${{ vars.CLOUD_RUN_SERVICE != '' && vars.CLOUD_RUN_SERVICE || 'dailyveg-backend' }}"

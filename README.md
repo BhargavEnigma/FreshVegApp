@@ -30,7 +30,7 @@ Deploy order in both workflows:
 Create these GitHub Environments:
 
 - `dev`
-- `production`
+- `Prod`
 
 Each environment should define the same variable names and secret names, but with environment-specific values.
 
