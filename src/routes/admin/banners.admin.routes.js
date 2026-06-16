@@ -27,23 +27,7 @@ router.post(
     asyncHandler(AdminBannersController.createWithImage)
 );
 
-router.put("/:bannerId", requireAuth, requireRole(["admin"]), asyncHandler(AdminBannersController.update));
-
-// Update banner + optionally replace image in same call (multipart/form-data)
-// Files field: image (single)
-router.put(
-    "/:bannerId/with-image",
-    requireAuth,
-    requireRole(["admin"]),
-    bannerImagesUpload.single("image"),
-    asyncHandler(AdminBannersController.updateWithImage)
-);
-
-router.patch("/:bannerId/active", requireAuth, requireRole(["admin"]), asyncHandler(AdminBannersController.setActive));
-
 router.put("/reorder", requireAuth, requireRole(["admin"]), asyncHandler(AdminBannersController.reorder));
-
-router.delete("/:bannerId", requireAuth, requireRole(["admin"]), asyncHandler(AdminBannersController.remove));
 
 router.get(
     "/options/products",
@@ -58,5 +42,21 @@ router.get(
     requireRole(["admin"]),
     AdminBannersController.listCategories
 );
+
+router.put("/:bannerId", requireAuth, requireRole(["admin"]), asyncHandler(AdminBannersController.update));
+
+// Update banner + optionally replace image in same call (multipart/form-data)
+// Files field: image (single)
+router.put(
+    "/:bannerId/with-image",
+    requireAuth,
+    requireRole(["admin"]),
+    bannerImagesUpload.single("image"),
+    asyncHandler(AdminBannersController.updateWithImage)
+);
+
+router.patch("/:bannerId/active", requireAuth, requireRole(["admin"]), asyncHandler(AdminBannersController.setActive));
+
+router.delete("/:bannerId", requireAuth, requireRole(["admin"]), asyncHandler(AdminBannersController.remove));
 
 module.exports = router;

@@ -35,7 +35,7 @@ const opsSchedulerRoutes = require("./routes/ops/scheduler.ops.routes.js");
 const adminUsersRoutes = require("./routes/admin/users.admin.routes");
 const adminDashboardRoutes = require("./routes/admin/dashboard.admin.routes");
 const adminOrdersRoutes = require("./routes/admin/orders.admin.routes");
-const adminAiRoutes = require("./routes/admin/ai.admin.routes")
+const adminAiRoutes = require("./routes/admin/ai.admin.routes");
 
 const adminCostRoutes = require("./routes/admin/cost.routes");
 
@@ -63,28 +63,19 @@ try {
     // Do not crash app if uploads dir can't be created (still allow non-upload flows)
 }
 
-// ✅ Raw body for webhook only
-app.use((req, res, next) => {
-    // Note: originalUrl may include query string, so use startsWith.
-    if (String(req.originalUrl || "").startsWith("/v1/payments/webhook")) {
-        let data = "";
-        req.setEncoding("utf8");
-        req.on("data", (chunk) => {
-            data += chunk;
-        });
-        req.on("end", () => {
-            req.rawBody = data;
-            try {
-                req.body = data ? JSON.parse(data) : {};
-            } catch {
-                req.body = {};
-            }
-            next();
-        });
-        return;
+app.use(
+    "/v1/payments/webhook",
+    express.raw({ type: "*/*", limit: "1mb" }),
+    (req, _res, next) => {
+        req.rawBody = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : String(req.body || "");
+        try {
+            req.body = req.rawBody ? JSON.parse(req.rawBody) : {};
+        } catch {
+            req.body = {};
+        }
+        next();
     }
-    next();
-});
+);
 
 app.use(
     cors({
@@ -93,7 +84,7 @@ app.use(
     })
 );
 
-app.use(express.json({ limit: "1mb" }));  
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/v1/health", healthRoutes);

@@ -29,29 +29,25 @@ async function sendOtp(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        console.log('E : ', e);
         console.error("AUTH_ERROR", {
             code: e?.code || e?.name || "UNKNOWN",
             message: e?.message || "Auth error",
         });
 
-        // ✅ AppError path (your services throw this)
         if (e instanceof AppError) {
             return ResponseUtil.fail(
                 res,
-                500,
-                "PROVIDER_ERROR",
-                "Unable to send OTP. Please try again.",
-                null
+                e.httpStatus || 500,
+                e.code,
+                e.message,
+                e.details || null
             );
         }
 
-        // ✅ Zod validation
         if (e?.name === "ZodError") {
             return ResponseUtil.fail(res, 400, "INVALID_PHONE", "Invalid request body", e.issues ?? null);
         }
 
-        // ✅ Axios / unknown error
         const details = e?.response?.data || { message: e?.message };
         return ResponseUtil.fail(res, 500, "PROVIDER_ERROR", "Something went wrong", details);
     }
@@ -73,7 +69,6 @@ async function verifyOtp(req, res) {
 
         return ResponseUtil.ok(res, 200, data);
     } catch (e) {
-        console.log('E : ', e);
         console.error("AUTH_ERROR", {
             code: e?.code || e?.name || "UNKNOWN",
             message: e?.message || "Auth error",
@@ -82,10 +77,10 @@ async function verifyOtp(req, res) {
         if (e instanceof AppError) {
             return ResponseUtil.fail(
                 res,
-                500,
-                "PROVIDER_ERROR",
-                "Unable to verify OTP. Please try again.",
-                null
+                e.httpStatus || 500,
+                e.code,
+                e.message,
+                e.details || null
             );
         }
 

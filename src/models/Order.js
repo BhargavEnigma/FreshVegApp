@@ -246,7 +246,6 @@ module.exports = (sequelize, DataTypes) => {
             idempotency_key: {
                 type: DataTypes.TEXT,
                 allowNull: true,
-                unique: true,
             },
         },
         {

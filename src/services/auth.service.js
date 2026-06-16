@@ -69,7 +69,7 @@ async function sendOtp({ phone, purpose, ipAddress, userAgent }) {
     try {
         if (env.otp?.bypassEnabled) {
             providerResp = {
-                opt_request_id: `dev_${Date.now()}`,
+                provider_request_id: `dev_${Date.now()}`,
                 expires_in_seconds: Number(env.otp.msg91OTPexpiryMinutes || 5) * 60,
             };
         } else {
@@ -115,18 +115,14 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
     const normalizedPhone = normalizePhone(phone);
     const providedOtp = String(otp || "").trim();
 
-    console.log('env?.otp?.bypassEnabled : ', env?.otp?.bypassEnabled === true);
-
     const bypassEnabled = env?.otp?.bypassEnabled === true;
     const bypassCode = String(env?.otp?.bypassCode || "").trim();
     const allowedPhones = getOtpBypassAllowedPhones();
     const isBypassOtp =
         env.nodeEnv !== "production" &&
         bypassEnabled &&
-        providedOtp === bypassCode 
-        // && allowedPhones.includes(normalizedPhone);
-
-    console.log('isBypassOtp : ', isBypassOtp);
+        providedOtp === bypassCode &&
+        (allowedPhones.length === 0 || allowedPhones.includes(normalizedPhone));
 
     const otpReq = await OtpRequest.findOne({
         where: {
@@ -177,7 +173,6 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
             });
         }
     } catch (error) {
-        console.log('error --- : ', error);
         const freshOtpReq = await OtpRequest.findByPk(otpReq.id);
 
         if (Number(freshOtpReq?.attempt_count || 0) >= 5) {

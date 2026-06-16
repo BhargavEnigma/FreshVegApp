@@ -1,18 +1,72 @@
 const {
     GoogleGenerativeAI,
 } = require("@google/generative-ai");
+const { AppError } = require("../../utils/errors");
 
-const genAi = new GoogleGenerativeAI(
-    process.env.GEMINI_API_KEY
-);
+function getGeminiApiKey() {
+    const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
+    if (!apiKey) {
+        throw new AppError("AI_NOT_CONFIGURED", "Gemini API key is not configured", 500);
+    }
 
-const model = genAi.getGenerativeModel({
-    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
-});
+    return apiKey;
+}
+
+function getGeminiModel() {
+    const genAi = new GoogleGenerativeAI(getGeminiApiKey());
+
+    return genAi.getGenerativeModel({
+        model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
+    });
+}
+
+function mapGeminiError(error) {
+    const status = Number(error?.status || error?.response?.status || 500);
+    const message = String(error?.message || "");
+    const lowerMessage = message.toLowerCase();
+
+    if (status === 429 && lowerMessage.includes("prepayment credits are depleted")) {
+        return new AppError(
+            "AI_CREDITS_DEPLETED",
+            "AI description generation is temporarily unavailable because Gemini credits are depleted.",
+            402
+        );
+    }
+
+    if (status === 429) {
+        return new AppError(
+            "AI_RATE_LIMITED",
+            "AI description generation is temporarily rate limited. Please try again later.",
+            429
+        );
+    }
+
+    if (status === 401 || status === 403) {
+        return new AppError(
+            "AI_AUTH_FAILED",
+            "AI provider authentication failed. Please check Gemini API key and billing access.",
+            502
+        );
+    }
+
+    if (status >= 400 && status < 500) {
+        return new AppError(
+            "AI_BAD_REQUEST",
+            "AI provider rejected the description request.",
+            400
+        );
+    }
+
+    return new AppError(
+        "AI_PROVIDER_ERROR",
+        "AI description generation failed. Please try again later.",
+        502
+    );
+}
 
 async function generateProductDescription({ name }) {
     if (!name || !String(name).trim()) {
-        throw new Error("Product name is required");
+        throw new AppError("VALIDATION_ERROR", "Product name is required", 400);
     }
 
 //     const prompt = `
@@ -78,7 +132,12 @@ Magnesium	8 mg	2%
 Also Add Perfect space and formatting for easy readability on the app.
 `;
 
-    const result = await model.generateContent(prompt);
+    let result;
+    try {
+        result = await getGeminiModel().generateContent(prompt);
+    } catch (error) {
+        throw mapGeminiError(error);
+    }
 
     return result.response.text().trim();
 }

@@ -319,7 +319,7 @@ module.exports = {
                 locked_at: { type: Sequelize.DATE, allowNull: true },
                 cancelled_at: { type: Sequelize.DATE, allowNull: true },
                 cancellation_reason: { type: Sequelize.TEXT, allowNull: true },
-                idempotency_key: { type: Sequelize.TEXT, allowNull: true, unique: true },
+                idempotency_key: { type: Sequelize.TEXT, allowNull: true },
                 created_at: createdAt(Sequelize),
                 updated_at: updatedAt(Sequelize),
             }, { transaction });
