@@ -18,6 +18,7 @@ fi
 
 MISSING_VARS=()
 MISSING_FILES=()
+CONFIG_ERRORS=()
 
 require_var() {
     local name="$1"
@@ -57,6 +58,10 @@ if [ "${STORAGE_PROVIDER:-}" = "supabase" ]; then
     require_var "SUPABASE_URL"
 fi
 
+if [ "${OTP_BYPASS_ENABLED:-false}" = "true" ]; then
+    CONFIG_ERRORS+=("OTP_BYPASS_ENABLED must be false or unset for deployed dev/prod real OTP")
+fi
+
 if [ -z "$DEPLOY_PROJECT_ID" ]; then
     MISSING_VARS+=("GCP_PROJECT_ID or FIREBASE_PROJECT_ALIAS")
 fi
@@ -67,8 +72,15 @@ require_file "${REPO_ROOT}/src/scripts/deploy-firebase-hosting.sh"
 require_file "$FIREBASE_CONFIG_PATH"
 require_dir "${REPO_ROOT}/public"
 
-if [ "${#MISSING_VARS[@]}" -gt 0 ] || [ "${#MISSING_FILES[@]}" -gt 0 ]; then
+if [ "${#MISSING_VARS[@]}" -gt 0 ] || [ "${#MISSING_FILES[@]}" -gt 0 ] || [ "${#CONFIG_ERRORS[@]}" -gt 0 ]; then
     echo "Deployment preflight failed for GitHub Environment: ${DEPLOY_ENVIRONMENT_NAME}" >&2
+
+    if [ "${#CONFIG_ERRORS[@]}" -gt 0 ]; then
+        echo "Invalid deployment configuration:" >&2
+        for message in "${CONFIG_ERRORS[@]}"; do
+            echo "  - ${message}" >&2
+        done
+    fi
 
     if [ "${#MISSING_VARS[@]}" -gt 0 ]; then
         echo "Missing GitHub Environment variables. Add these under GitHub Settings > Environments > ${DEPLOY_ENVIRONMENT_NAME} > Variables:" >&2

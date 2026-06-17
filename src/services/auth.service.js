@@ -52,10 +52,13 @@ async function enforceOtpRateLimit({ phone, purpose, ipAddress }) {
 }
 
 function getOtpBypassAllowedPhones() {
-    return String(process.env.OTP_BYPASS_ALLOWED_PHONES || "")
-        .split(",")
+    return (env.otp?.bypassAllowedPhones || [])
         .map((p) => normalizePhone(p.trim()))
         .filter(Boolean);
+}
+
+function isOtpBypassAvailable() {
+    return env.nodeEnv !== "production" && !env.isManagedDeploy && env.otp?.bypassEnabled === true;
 }
 
 async function sendOtp({ phone, purpose, ipAddress, userAgent }) {
@@ -67,7 +70,7 @@ async function sendOtp({ phone, purpose, ipAddress, userAgent }) {
 
     let providerResp;
     try {
-        if (env.otp?.bypassEnabled) {
+        if (isOtpBypassAvailable()) {
             providerResp = {
                 provider_request_id: `dev_${Date.now()}`,
                 expires_in_seconds: Number(env.otp.msg91OTPexpiryMinutes || 5) * 60,
@@ -115,12 +118,10 @@ async function verifyOtp({ otp_request_id, phone, otp, device, fcm_token, ipAddr
     const normalizedPhone = normalizePhone(phone);
     const providedOtp = String(otp || "").trim();
 
-    const bypassEnabled = env?.otp?.bypassEnabled === true;
     const bypassCode = String(env?.otp?.bypassCode || "").trim();
     const allowedPhones = getOtpBypassAllowedPhones();
     const isBypassOtp =
-        env.nodeEnv !== "production" &&
-        bypassEnabled &&
+        isOtpBypassAvailable() &&
         providedOtp === bypassCode &&
         (allowedPhones.length === 0 || allowedPhones.includes(normalizedPhone));
 

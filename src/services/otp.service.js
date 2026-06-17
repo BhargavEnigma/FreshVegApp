@@ -2,8 +2,6 @@ const axios = require("axios");
 const { env } = require("../config/env");
 const { AppError } = require("../utils/errors");
 
-const MSG91_BASE_URL = "https://control.msg91.com/api/v5";
-
 /**
  * MSG91 v5: Send OTP
  * GET /otp?otp_expiry=&template_id=&mobile=&authkey=&realTimeResponse=
@@ -26,7 +24,7 @@ async function sendOtpViaMsg91({ phone, otpExpiryMinutes }) {
     };
 
     try {
-        const resp = await axios.get(`${MSG91_BASE_URL}/otp`, {
+        const resp = await axios.get(`${env.otp.msg91BaseUrl}/otp`, {
             params,
             headers: {
                 authkey: env.otp.msg91AuthKey, // send in header too (more compatible)
@@ -85,7 +83,7 @@ async function verifyOtpViaMsg91({ phone, otp, otpExpiryMinutes }) {
     }
 
     try {
-        const resp = await axios.get(`${MSG91_BASE_URL}/otp/verify`, {
+        const resp = await axios.get(`${env.otp.msg91BaseUrl}/otp/verify`, {
             params,
             headers: {
                 authkey: env.otp.msg91AuthKey, // header too :contentReference[oaicite:4]{index=4}

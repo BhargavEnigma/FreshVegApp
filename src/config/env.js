@@ -20,8 +20,21 @@ function parseIntSafe(value, fallback) {
     return Number.isFinite(n) ? n : fallback;
 }
 
+function normalizeMsg91BaseUrl(value) {
+    return String(value || "https://control.msg91.com/api/v5")
+        .trim()
+        .replace(/\/+$/, "")
+        .replace(/\/otp(?:\/verify)?$/, "");
+}
+
+const deployEnvironment = (process.env.DEPLOY_ENVIRONMENT || "").trim();
+const isCloudRunRuntime = Boolean(process.env.K_SERVICE);
+const isManagedDeploy = isCloudRunRuntime || ["dev", "prod", "production"].includes(deployEnvironment.toLowerCase());
+
 const env = {
     nodeEnv: process.env.NODE_ENV || "development",
+    deployEnvironment,
+    isManagedDeploy,
     port: parseIntSafe(process.env.PORT, 3000),
 
     corsOrigins: (process.env.CORS_ORIGINS || "")
@@ -48,13 +61,18 @@ const env = {
     otp: {
         msg91AuthKey: requireEnv("MSG91_AUTH_KEY"),
         msg91TemplateId: requireEnv("MSG91_TEMPLATE_ID"),
+        msg91BaseUrl: normalizeMsg91BaseUrl(process.env.MSG91_BASE_URL),
         msg91OTPexpiryMinutes: parseIntSafe(process.env.OTP_EXPIRY_MINUTES, 5),
         msg91RealTimeRes: parseIntSafe(process.env.MSG91_REALTIME_RESPONSE, 1),
         otpLength: parseIntSafe(process.env.OTP_LENGTH, 4),
 
-        // these should NOT be required in production
+        // Bypass is only for local/manual development. Managed dev/prod deploys must use real MSG91 OTP.
         bypassEnabled: parseBool(process.env.OTP_BYPASS_ENABLED, false),
         bypassCode: String(process.env.OTP_BYPASS_CODE || "1234").trim(),
+        bypassAllowedPhones: (process.env.OTP_BYPASS_ALLOWED_PHONES || "")
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
     },
 
     // Optional: used to build absolute URLs for uploaded assets.
@@ -81,8 +99,8 @@ const env = {
 
 function validateProductionEnv() {
 
-    if (env.nodeEnv === "production" && env.otp.bypassEnabled) {
-        throw new Error("OTP_BYPASS_ENABLED must be false in production");
+    if ((env.nodeEnv === "production" || env.isManagedDeploy) && env.otp.bypassEnabled) {
+        throw new Error("OTP_BYPASS_ENABLED must be false in dev/prod deployments");
     }
 
     if (!env.corsOrigins.length) {

@@ -51,7 +51,6 @@ Each environment should define the same variable names and secret names, but wit
 - `SUPABASE_BUCKET_PUBLIC`
 - `RAZORPAY_KEY_ID`
 - `MSG91_TEMPLATE_ID`
-- `OTP_BYPASS_ENABLED`
 - `ENABLE_SCHEDULER`
 - `ENABLE_NOTIFICATIONS_WORKER`
 - `CORS_ORIGINS`
@@ -92,6 +91,8 @@ Application runtime secrets stay in Google Cloud Secret Manager and are attached
 - `INTERNAL_JOB_SECRET`
 
 The deploy script binds those secrets with `--set-secrets` when deploying Cloud Run.
+
+OTP login in both deployed dev and production environments uses MSG91 verification only. Do not configure `OTP_BYPASS_ENABLED`, `OTP_BYPASS_CODE`, or `OTP_BYPASS_ALLOWED_PHONES` in GitHub Environments or Cloud Run; those bypass variables are reserved for local/manual development.
 
 ## Google Cloud Setup
 
